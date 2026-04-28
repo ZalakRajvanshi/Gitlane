@@ -92,7 +92,7 @@ Run `gitmind --web` and open `http://localhost:7123` to see:
 | ⚠️ Blocker detection | Flags stalled repos automatically |
 | 📊 Productivity analysis | When do you code most? What patterns do you have? |
 | 🌐 Browser dashboard | Full visual UI at localhost:7123 |
-| 🔔 Boot notification | Desktop notification when laptop starts |
+| 🔔 Daily notification | Desktop notification at a time you choose during setup |
 
 ---
 

@@ -62,19 +62,26 @@ if ($addPath -ne "n" -and $addPath -ne "N") {
     }
 }
 
-# Startup on boot
+# Daily notification schedule
 Write-Host ""
-$startup = Read-Host "Run GitMind notification on Windows startup? [Y/n]"
+$startup = Read-Host "Schedule a daily GitMind notification? [Y/n]"
 if ($startup -ne "n" -and $startup -ne "N") {
-    $taskName   = "GitMind_Startup"
+    $timeInput = Read-Host "What time should it run? (e.g. 18:00 for 6 PM, 09:00 for 9 AM)"
+    try {
+        $parsedTime = [datetime]::ParseExact($timeInput.Trim(), "HH:mm", $null)
+    } catch {
+        Write-Host "Invalid time format, defaulting to 18:00" -ForegroundColor Yellow
+        $parsedTime = [datetime]::ParseExact("18:00", "HH:mm", $null)
+    }
+    $taskName   = "GitMind_Daily"
     $pythonExe  = "$VENV\Scripts\python.exe"
     $scriptPath = "$DIR\main.py"
     $action     = New-ScheduledTaskAction -Execute $pythonExe -Argument "`"$scriptPath`" --notify" -WorkingDirectory $DIR
-    $trigger    = New-ScheduledTaskTrigger -AtLogOn
+    $trigger    = New-ScheduledTaskTrigger -Daily -At $parsedTime
     $settings   = New-ScheduledTaskSettingsSet -StartWhenAvailable
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -RunLevel Limited -Force | Out-Null
-    Write-Host "OK: Windows startup task created" -ForegroundColor Green
+    Write-Host "OK: Daily notification scheduled at $($parsedTime.ToString('HH:mm'))" -ForegroundColor Green
 }
 
 # Add to PowerShell profile (runs when terminal opens)
