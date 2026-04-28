@@ -10,7 +10,9 @@ def _chat(system: str, user: str, max_tokens: int = 1024) -> str:
     cfg = load()
     model = cfg.get("groq_model", "llama3-70b-8192")
     try:
-        resp = _client().chat.completions.create(
+        key = groq_key()  # call outside inner try so errors surface clearly
+        client = Groq(api_key=key)
+        resp = client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": system},
