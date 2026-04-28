@@ -1,0 +1,47 @@
+========================================
+  ⚡ GitMind — Windows Quick Start
+========================================
+
+STEP 1 — Open PowerShell
+  Right-click the Start button → "Windows PowerShell"
+  Or search "PowerShell" in Start menu
+
+STEP 2 — Go to the GitMind folder
+  Type this (replace with YOUR actual path):
+  cd C:\Users\zalak\OneDrive\Desktop\gitmind_v2\gitmind_v2
+
+STEP 3 — Allow scripts to run (one-time only)
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  Type Y and press Enter when asked
+
+STEP 4 — Run setup
+  .\setup.ps1
+
+  This will:
+  - Install all packages automatically
+  - Create a gitmind.bat launcher
+  - Optionally add it to startup
+
+STEP 5 — Run GitMind anytime
+  .\gitmind.bat
+  (or just: gitmind  if you said Yes to PATH)
+
+========================================
+  That's it! GitMind walks you through
+  the rest (Groq key, GitHub username).
+========================================
+
+TROUBLESHOOTING
+---------------
+"Python not found"
+  → Download Python from https://www.python.org/downloads/
+  → During install, CHECK "Add Python to PATH"
+  → Restart PowerShell after installing
+
+"execution of scripts is disabled"
+  → Run: Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+"pip not found"
+  → Run: python -m ensurepip --upgrade
+
+Any other issue → just run: python main.py
