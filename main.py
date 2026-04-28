@@ -53,6 +53,11 @@ def main():
         from agent.tui import run_menu
         run_menu()
 
+    # commit: run commit flow directly
+    elif args and args[0] == "commit":
+        from agent.commit_flow import run_commit_flow
+        run_commit_flow()
+
     # ask "question": one-shot question
     elif args and args[0] == "ask":
         question = " ".join(args[1:])

@@ -38,8 +38,8 @@ def _run(cmd: list, cwd: str) -> tuple:
     return r.returncode, r.stdout.strip(), r.stderr.strip()
 
 
-def find_git_repos(root_folder: str) -> list[dict]:
-    """Scan folder for git repos — goes 2 levels deep."""
+def find_git_repos(root_folder: str, cwd: str = None) -> list[dict]:
+    """Scan folder for git repos — goes 3 levels deep. Also checks cwd first."""
     root  = Path(root_folder)
     repos = []
     seen  = set()
@@ -50,33 +50,34 @@ def find_git_repos(root_folder: str) -> list[dict]:
             seen.add(p)
             repos.append({"name": path.name, "path": str(path)})
 
+    # Check current working directory first
+    if cwd:
+        cwd_path = Path(cwd)
+        for p in [cwd_path] + list(cwd_path.parents)[:3]:
+            if (p / ".git").exists():
+                add(p)
+                break
+
     if not root.exists():
         return repos
 
-    # Root itself
+    def scan(path: Path, depth: int):
+        if depth > 3:
+            return
+        try:
+            for item in path.iterdir():
+                if not item.is_dir() or item.name.startswith("."):
+                    continue
+                if (item / ".git").exists():
+                    add(item)
+                else:
+                    scan(item, depth + 1)
+        except PermissionError:
+            pass
+
     if (root / ".git").exists():
         add(root)
-
-    # One level deep
-    try:
-        for item in root.iterdir():
-            if not item.is_dir():
-                continue
-            if item.name.startswith("."):
-                continue
-            if (item / ".git").exists():
-                add(item)
-            else:
-                # Two levels deep
-                try:
-                    for sub in item.iterdir():
-                        if sub.is_dir() and (sub / ".git").exists():
-                            add(sub)
-                except PermissionError:
-                    pass
-    except PermissionError:
-        pass
-
+    scan(root, 1)
     return repos
 
 

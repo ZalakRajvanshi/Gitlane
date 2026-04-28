@@ -188,12 +188,11 @@ def create_sprint(goal: str, days: int = 7) -> int:
         return cur.lastrowid
 
 def get_active_sprint() -> dict | None:
-    today = date.today().isoformat()
     with _conn() as c:
         row = c.execute("""
-            SELECT * FROM sprints WHERE status='active' AND end_date >= ?
+            SELECT * FROM sprints WHERE status='active'
             ORDER BY created_at DESC LIMIT 1
-        """, (today,)).fetchone()
+        """).fetchone()
     return dict(row) if row else None
 
 def close_sprint(sprint_id: int, retro: str):

@@ -39,12 +39,14 @@ When you open your terminal (or on boot):
 ./gitmind.sh --cli     → jump straight to the menu
 ./gitmind.sh --web     → open browser dashboard
 ./gitmind.sh --notify  → send a desktop notification only
+./gitmind.sh commit    → smart commit from any project folder
 ./gitmind.sh ask "what did I work on this week?"  → one-shot question
 ```
 
 If you added it globally during setup:
 ```
 gitmind
+gitmind commit
 gitmind --web
 gitmind ask "what should I work on next?"
 ```

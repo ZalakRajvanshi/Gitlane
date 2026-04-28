@@ -272,21 +272,30 @@ def run_menu():
             sprint = db.get_active_sprint()
             if sprint:
                 days_left = (date.fromisoformat(sprint["end_date"]) - date.today()).days
+                status_str = f"[red]Ended {abs(days_left)} days ago[/red]" if days_left < 0 else f"{days_left} days left"
                 console.print(Panel(
                     f"[bold]Goal:[/bold] {sprint['goal']}\n"
-                    f"[bold]Ends:[/bold] {sprint['end_date']} ({days_left} days left)",
+                    f"[bold]Ends:[/bold] {sprint['end_date']} ({status_str})",
                     title="[bold]🏃 Active Sprint[/bold]", border_style="yellow"
                 ))
-                if days_left <= 0 and Confirm.ask("  Sprint ended — close it?", default=True):
+                try:
+                    close = Confirm.ask("  Close this sprint and generate retro?", default=days_left <= 0)
+                except (EOFError, KeyboardInterrupt):
+                    close = False
+                if close:
                     c, _ = _ctx()
-                    retro = ai.generate_sprint_retro(sprint, c)
+                    with _spinner("Writing retrospective..."):
+                        retro = ai.generate_sprint_retro(sprint, c)
                     db.close_sprint(sprint["id"], retro)
-                    console.print(Panel(retro, title="[bold]📝 Retro[/bold]", border_style="green"))
+                    console.print(Panel(retro, title="[bold]📝 Sprint Retro[/bold]", border_style="green"))
             else:
-                goal = Prompt.ask("\n  [cyan]>[/cyan] Sprint goal (e.g. 'Finish SmartTaskAI v1')")
+                goal = Prompt.ask("\n  [cyan]>[/cyan] Sprint goal")
                 days = Prompt.ask("  How many days?", default="7")
                 if goal.strip():
-                    sid = db.create_sprint(goal.strip(), int(days))
+                    try:
+                        sid = db.create_sprint(goal.strip(), int(days))
+                    except ValueError:
+                        sid = db.create_sprint(goal.strip(), 7)
                     console.print(f"[green]  ✅ Sprint started! ID #{sid}[/green]")
 
         elif choice == "5":

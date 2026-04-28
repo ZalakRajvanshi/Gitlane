@@ -256,7 +256,8 @@ def run_commit_flow():
     if not folder:
         return
 
-    repos = gm.find_git_repos(folder)
+    import os
+    repos = gm.find_git_repos(folder, cwd=os.getcwd())
     if not repos:
         console.print(f"[yellow]  No git repos found in {folder}[/yellow]")
         cfg = load()

@@ -50,8 +50,8 @@ def get_commit_files(username: str, repo: str, sha: str) -> dict:
     except Exception:
         return {"files": [], "additions": 0, "deletions": 0}
 
-def fetch_all_recent(since_days: int = 7, use_cache: bool = True) -> list[dict]:
-    """Fetch all commits — returns cached if fresh, else fetches live."""
+def fetch_all_recent(since_days: int = 7, use_cache: bool = False) -> list[dict]:
+    """Fetch all commits — always live, falls back to cache on error."""
     if use_cache:
         cached = db.get_cached_commits(since_days)
         if cached:
