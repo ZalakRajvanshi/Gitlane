@@ -162,3 +162,19 @@ Optionally add a GitHub token for detailed file stats:
 1. Go to [github.com/settings/tokens](https://github.com/settings/tokens)
 2. Create token → check `repo` scope
 3. Paste when GitMind asks (or add `GITHUB_TOKEN=...` to `.env`)
+
+---
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for full details.
+
+This project is free to use, modify, and distribute. Credit to the original author is required.
+
+---
+
+## Author
+
+Built by **Zalak Rajvanshi**
+
+© 2026 Zalak Rajvanshi. All rights reserved under the MIT License.
