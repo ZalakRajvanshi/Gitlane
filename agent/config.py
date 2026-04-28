@@ -34,20 +34,33 @@ def save(cfg: dict):
     CFG_FILE.write_text(json.dumps(cfg, indent=2))
 
 def groq_key() -> str:
+    # Try env var first
     k = os.getenv("GROQ_API_KEY", "").strip()
-    if not k:
-        # Re-attempt load in case this is a thread/subprocess context
-        from dotenv import load_dotenv
-        load_dotenv(BASE_DIR / ".env", override=True)
-        k = os.getenv("GROQ_API_KEY", "").strip()
-    if not k:
-        raise ValueError("GROQ_API_KEY missing from .env")
-    return k
+    if k:
+        return k
+    # Direct file read as fallback — works in any thread/subprocess context
+    env_file = BASE_DIR / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("GROQ_API_KEY="):
+                k = line.split("=", 1)[1].strip()
+                if k:
+                    os.environ["GROQ_API_KEY"] = k
+                    return k
+    raise ValueError("GROQ_API_KEY missing from .env")
 
 def github_token() -> str:
     t = os.getenv("GITHUB_TOKEN", "").strip()
-    if not t:
-        from dotenv import load_dotenv
-        load_dotenv(BASE_DIR / ".env", override=True)
-        t = os.getenv("GITHUB_TOKEN", "").strip()
-    return t
+    if t:
+        return t
+    env_file = BASE_DIR / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("GITHUB_TOKEN="):
+                t = line.split("=", 1)[1].strip()
+                if t:
+                    os.environ["GITHUB_TOKEN"] = t
+                    return t
+    return ""
