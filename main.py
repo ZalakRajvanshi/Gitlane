@@ -6,10 +6,20 @@ Usage:
   python main.py --cli      -> interactive menu only
   python main.py --web      -> open browser dashboard
   python main.py --notify   -> send boot notification only (for Task Scheduler)
+  python main.py commit     -> smart commit from any project folder
   python main.py ask "..."  -> one-shot question
 """
 import sys
 import os
+
+# Force UTF-8 output on Windows to support emojis
+if sys.platform == "win32":
+    os.environ.setdefault("PYTHONUTF8", "1")
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from agent import database as db
