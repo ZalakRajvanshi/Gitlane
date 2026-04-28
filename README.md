@@ -169,7 +169,7 @@ Optionally add a GitHub token for detailed file stats:
 
 MIT License — see [LICENSE](LICENSE) for full details.
 
-This project is free to use, modify, and distribute. Credit to the original author is required.
+This project is free to use, modify and contribute.
 
 ---
 
