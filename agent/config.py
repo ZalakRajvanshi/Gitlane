@@ -9,7 +9,7 @@ LOGS_DIR  = BASE_DIR / "logs"
 WEB_DIR   = BASE_DIR / "web"
 CFG_FILE  = BASE_DIR / "settings.json"
 
-load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR / ".env", override=True)
 
 DEFAULTS = {
     "github_username": "",

@@ -4,11 +4,12 @@
 
 import sys
 import os
-import threading
-import webbrowser
-import time
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Load .env FIRST before any other imports — pythonw.exe has no working directory
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _HERE)
+from dotenv import load_dotenv
+load_dotenv(os.path.join(_HERE, ".env"), override=True)
 
 from agent import database as db
 from agent.config import load

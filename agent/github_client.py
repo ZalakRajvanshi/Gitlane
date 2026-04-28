@@ -14,17 +14,27 @@ def _h():
     return h
 
 def get_repos(username: str) -> list[dict]:
+    """Fetch repos — uses /user/repos (authenticated) to include private repos."""
     repos, page = [], 1
+    token = github_token()
+    # Use authenticated endpoint to get all repos including private
+    endpoint = f"{API}/user/repos" if token else f"{API}/users/{username}/repos"
     while True:
-        r = requests.get(f"{API}/users/{username}/repos", headers=_h(),
-            params={"per_page": 100, "page": page, "sort": "updated"}, timeout=10)
-        if r.status_code != 200:
+        try:
+            r = requests.get(endpoint, headers=_h(),
+                params={"per_page": 100, "page": page, "sort": "updated", "affiliation": "owner"},
+                timeout=15)
+            if r.status_code != 200:
+                break
+            batch = r.json()
+            if not batch or isinstance(batch, dict):
+                break
+            repos.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        except Exception:
             break
-        batch = r.json()
-        if not batch or isinstance(batch, dict):
-            break
-        repos.extend(batch)
-        page += 1
     return repos
 
 def get_commits(username: str, repo: str, since_days: int = 7) -> list[dict]:
@@ -58,9 +68,9 @@ def fetch_all_recent(since_days: int = 7, use_cache: bool = False) -> list[dict]
             return cached
 
     cfg = load()
-    username = cfg["github_username"]
+    username = cfg.get("github_username", "")
     if not username:
-        return []
+        return db.get_cached_commits(since_days)
 
     repos = get_repos(username)
     all_commits = []
@@ -89,7 +99,7 @@ def fetch_all_recent(since_days: int = 7, use_cache: bool = False) -> list[dict]
 def get_file_stats(since_days: int = 7) -> dict:
     """Returns {filename: {count, additions, deletions, repo}}"""
     cfg = load()
-    username = cfg["github_username"]
+    username = cfg.get("github_username", "")
     if not username:
         return {}
 
