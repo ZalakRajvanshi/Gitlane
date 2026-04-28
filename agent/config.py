@@ -34,10 +34,20 @@ def save(cfg: dict):
     CFG_FILE.write_text(json.dumps(cfg, indent=2))
 
 def groq_key() -> str:
-    k = os.getenv("GROQ_API_KEY", "")
+    k = os.getenv("GROQ_API_KEY", "").strip()
+    if not k:
+        # Re-attempt load in case this is a thread/subprocess context
+        from dotenv import load_dotenv
+        load_dotenv(BASE_DIR / ".env", override=True)
+        k = os.getenv("GROQ_API_KEY", "").strip()
     if not k:
         raise ValueError("GROQ_API_KEY missing from .env")
     return k
 
 def github_token() -> str:
-    return os.getenv("GITHUB_TOKEN", "")
+    t = os.getenv("GITHUB_TOKEN", "").strip()
+    if not t:
+        from dotenv import load_dotenv
+        load_dotenv(BASE_DIR / ".env", override=True)
+        t = os.getenv("GITHUB_TOKEN", "").strip()
+    return t
