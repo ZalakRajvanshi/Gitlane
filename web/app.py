@@ -8,9 +8,13 @@ from agent import database as db, github_client as gh, ai
 from agent import git_manager as gm
 from agent import commit_flow as cf
 from agent.config import load, save
-from datetime import date
+from datetime import date, timedelta
 
 app = Flask(__name__)
+
+
+def _err(msg, code: int = 200):
+    return jsonify({"ok": False, "error": str(msg)}), code
 
 HTML = '''<!DOCTYPE html>
 <html lang="en">
@@ -19,401 +23,424 @@ HTML = '''<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GitMind ⚡</title>
 <style>
+  /* ── Cursor/Claude-style minimalist palette ─────────────── */
   :root {
-    --bg:        #0a0e14;
-    --bg-card:   #141a23;
-    --bg-deep:   #0d1117;
-    --bg-soft:   #1c2230;
-    --border:    #2a3140;
-    --border-hi: #3d465a;
-    --text:      #e6edf3;
-    --text-dim:  #9aa5b8;
-    --text-faint:#5b6477;
-    --accent:    #58a6ff;
-    --accent-2:  #7c5cff;
-    --success:   #3fb950;
-    --warn:      #e3b341;
-    --danger:    #f85149;
-    --orange:    #ffa657;
-    --shadow:    0 4px 16px rgba(0,0,0,.35);
-    --shadow-lg: 0 16px 48px rgba(0,0,0,.55);
-    --radius:    12px;
-    --radius-sm: 8px;
+    --bg:         #0a0c10;
+    --surface:    #11141b;
+    --surface-2:  #161a23;
+    --surface-3:  #1c2230;
+    --border:     #1f2630;
+    --border-hi:  #2c3444;
+
+    --text:       #e8eaef;
+    --text-2:     #98a2b3;
+    --text-3:     #5d6677;
+
+    --accent:     #6366f1;       /* refined indigo - the ONE accent */
+    --accent-soft: rgba(99,102,241,.14);
+    --accent-line: rgba(99,102,241,.45);
+
+    /* status colors used sparingly, only for true status */
+    --success:    #22c55e;
+    --warn:       #f59e0b;
+    --danger:     #ef4444;
+
+    /* Calendar intensity shades — 5 levels of accent indigo */
+    --cal-0:      #161a23;       /* no activity */
+    --cal-1:      rgba(99,102,241,.22);
+    --cal-2:      rgba(99,102,241,.42);
+    --cal-3:      rgba(99,102,241,.65);
+    --cal-4:      rgba(99,102,241,.92);
+
+    --shadow:     0 1px 3px rgba(0,0,0,.4);
+    --shadow-md:  0 8px 24px rgba(0,0,0,.45);
+    --shadow-lg:  0 16px 48px rgba(0,0,0,.55);
+    --radius:     10px;
+    --radius-sm:  6px;
+    --radius-lg:  14px;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
-    font-family: -apple-system, 'Segoe UI', system-ui, Roboto, sans-serif;
-    background: radial-gradient(ellipse at top, #11161f 0%, var(--bg) 60%);
+    font-family: ui-sans-serif, -apple-system, 'Inter', 'Segoe UI', system-ui, Roboto, sans-serif;
+    background: var(--bg);
     color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased;
-    line-height: 1.5;
+    line-height: 1.55; font-size: 14px;
   }
-  ::selection { background: rgba(88,166,255,.25); }
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::selection { background: var(--accent-soft); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #2a3140; border-radius: 5px; }
-  ::-webkit-scrollbar-thumb:hover { background: #3d465a; }
+  ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a4356; }
+
+  a { color: inherit; text-decoration: none; }
+  code { font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace; font-size: .92em; }
 
   /* ── Header ─────────────────────────────────────────────── */
   .header {
-    background: rgba(20,26,35,.85); backdrop-filter: blur(10px);
+    background: rgba(10,12,16,.85); backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
-    padding: 16px 32px; display: flex; align-items: center; gap: 14px;
+    padding: 14px 28px; display: flex; align-items: center; gap: 14px;
     position: sticky; top: 0; z-index: 50;
   }
   .header .logo {
-    width: 32px; height: 32px; border-radius: 8px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    width: 28px; height: 28px; border-radius: 7px;
+    background: var(--accent);
     display: flex; align-items: center; justify-content: center;
-    font-size: 18px; box-shadow: 0 4px 12px rgba(88,166,255,.3);
+    font-size: 15px; color: white; font-weight: 700;
   }
-  .header h1 {
-    font-size: 19px; font-weight: 700;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    -webkit-background-clip: text; background-clip: text;
-    -webkit-text-fill-color: transparent;
-    letter-spacing: -.02em;
-  }
-  .header .user { color: var(--text-dim); font-size: 13px; font-weight: 500; }
-  .header .updated { margin-left: auto; color: var(--text-faint); font-size: 12px; display: flex; align-items: center; gap: 6px; }
-  .header .dot-live { width: 7px; height: 7px; background: var(--success); border-radius: 50%; box-shadow: 0 0 8px var(--success); animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1; transform:scale(1)} 50%{opacity:.5; transform:scale(.85)} }
+  .header h1 { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -.01em; }
+  .header .user { color: var(--text-2); font-size: 13px; }
+  .header .updated { margin-left: auto; color: var(--text-3); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .header .dot-live { width: 6px; height: 6px; background: var(--success); border-radius: 50%; animation: pulse 2.4s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
-  .container { max-width: 1180px; margin: 0 auto; padding: 28px 32px 60px; }
+  .container { max-width: 1180px; margin: 0 auto; padding: 28px 28px 80px; }
 
-  /* ── Stats grid ─────────────────────────────────────────── */
-  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+  /* ── Stats grid (very minimal) ──────────────────────────── */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
   .stat-card {
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 20px 22px;
-    position: relative; overflow: hidden;
-    transition: transform .2s, border-color .2s, box-shadow .2s;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px;
+    transition: border-color .15s;
   }
-  .stat-card::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: var(--accent-line, var(--accent)); opacity: .8;
-  }
-  .stat-card:hover { transform: translateY(-2px); border-color: var(--border-hi); box-shadow: var(--shadow); }
-  .stat-card .val { font-size: 30px; font-weight: 800; line-height: 1.1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-  .stat-card .lbl { color: var(--text-dim); font-size: 11px; margin-top: 8px; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
-  .stat-card .sub { color: var(--text-faint); font-size: 11px; margin-top: 4px; }
-  .stat-card.s-commits { --accent-line: var(--accent); }
-  .stat-card.s-streak  { --accent-line: var(--orange); }
-  .stat-card.s-repos   { --accent-line: var(--success); }
-  .stat-card.s-files   { --accent-line: #d2a8ff; }
+  .stat-card:hover { border-color: var(--border-hi); }
+  .stat-card .lbl { color: var(--text-2); font-size: 12px; font-weight: 500; margin-bottom: 8px; }
+  .stat-card .val { font-size: 28px; font-weight: 600; color: var(--text); line-height: 1.1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat-card .sub { color: var(--text-3); font-size: 12px; margin-top: 6px; }
 
-  /* ── Sections ────────────────────────────────────────────── */
-  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  /* ── Sections ─────────────────────────────────────────────── */
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
   .section {
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 22px 24px; margin-bottom: 18px;
-    transition: border-color .2s;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 22px 24px; margin-bottom: 14px;
   }
-  .section:hover { border-color: var(--border-hi); }
   .section-title {
-    font-size: 11px; color: var(--text-dim); text-transform: uppercase;
-    letter-spacing: .09em; font-weight: 700; margin-bottom: 18px;
-    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--text); font-weight: 600;
+    margin-bottom: 18px;
+    display: flex; align-items: center; gap: 8px; justify-content: space-between;
   }
+  .section-title .right { color: var(--text-3); font-size: 11px; font-weight: 500; }
+  .section-sub { color: var(--text-2); font-size: 13px; margin-top: -10px; margin-bottom: 16px; }
 
   /* ── Commits list ────────────────────────────────────────── */
-  .commit-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .commit-item { display: flex; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
   .commit-item:last-child { border-bottom: none; padding-bottom: 0; }
   .commit-item:first-child { padding-top: 0; }
-  .commit-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; margin-top: 6px; flex-shrink: 0; box-shadow: 0 0 6px rgba(63,185,80,.5); }
-  .commit-msg { font-size: 14px; color: var(--text); line-height: 1.45; font-weight: 500; }
-  .commit-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .commit-repo { color: var(--accent); font-weight: 600; }
-  .commit-sha { background: var(--bg-soft); padding: 2px 7px; border-radius: 4px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 11px; color: var(--text-dim); }
-  .empty-state { color: var(--text-faint); font-size: 13px; padding: 18px 0; text-align: center; line-height: 1.6; }
+  .commit-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-top: 7px; flex-shrink: 0; }
+  .commit-msg { font-size: 13.5px; color: var(--text); line-height: 1.5; }
+  .commit-meta { font-size: 12px; color: var(--text-3); margin-top: 3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .commit-repo { color: var(--accent); font-weight: 500; }
+  .commit-sha { background: var(--surface-3); padding: 1px 6px; border-radius: 3px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 11px; color: var(--text-2); }
+  .empty-state { color: var(--text-3); font-size: 13px; padding: 16px 0; text-align: center; line-height: 1.6; }
 
-  /* ── Calendar ────────────────────────────────────────────── */
+  /* ── Calendar (GitHub style, single hue intensity) ───────── */
   .cal-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 6px; }
-  .cal-header span { font-size: 10px; color: var(--text-faint); text-align: center; font-weight: 600; letter-spacing: .05em; }
+  .cal-header span { font-size: 10px; color: var(--text-3); text-align: center; font-weight: 500; }
   .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-  .cal-day { aspect-ratio: 1; border-radius: 4px; cursor: default; position: relative; transition: transform .15s; }
-  .cal-day:hover { transform: scale(1.15); z-index: 5; }
+  .cal-day { aspect-ratio: 1; border-radius: 3px; cursor: default; position: relative; transition: transform .12s; border: 1px solid transparent; }
+  .cal-day:hover { transform: scale(1.18); z-index: 5; border-color: var(--border-hi); }
   .cal-day:hover .cal-tooltip { display: block; }
-  .cal-committed { background: var(--success); box-shadow: 0 0 8px rgba(63,185,80,.35); }
-  .cal-skipped    { background: #f78166; }
-  .cal-pending    { background: var(--warn); }
-  .cal-no_data    { background: var(--bg-soft); }
-  .cal-today      { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* intensity levels (count-based) */
+  .cal-l0 { background: var(--cal-0); }
+  .cal-l1 { background: var(--cal-1); }
+  .cal-l2 { background: var(--cal-2); }
+  .cal-l3 { background: var(--cal-3); }
+  .cal-l4 { background: var(--cal-4); }
+  /* skipped: tiny inset ring without changing intensity */
+  .cal-skip { box-shadow: inset 0 0 0 1px rgba(245,158,11,.55); }
+  .cal-today { outline: 1.5px solid var(--accent); outline-offset: 1.5px; }
   .cal-tooltip {
-    display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-    background: #1c2128; border: 1px solid var(--border-hi); border-radius: 6px; padding: 6px 10px;
+    display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    background: var(--surface-3); border: 1px solid var(--border-hi); border-radius: 6px; padding: 6px 10px;
     font-size: 11px; white-space: nowrap; z-index: 10; color: var(--text);
-    pointer-events: none; box-shadow: var(--shadow);
+    pointer-events: none; box-shadow: var(--shadow-md);
   }
-  .cal-legend { display: flex; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
-  .cal-legend span { font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; font-weight: 500; }
-  .cal-legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .cal-legend { display: flex; align-items: center; gap: 6px; margin-top: 14px; font-size: 11px; color: var(--text-3); justify-content: flex-end; }
+  .cal-legend .scale { display: flex; gap: 3px; margin: 0 6px; }
+  .cal-legend .scale i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
 
   /* ── Goals ───────────────────────────────────────────────── */
   .goal-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); gap: 12px; }
   .goal-item:last-child { border-bottom: none; padding-bottom: 0; }
   .goal-item:first-child { padding-top: 0; }
   .goal-desc { font-size: 14px; font-weight: 500; }
-  .goal-repo { font-size: 12px; color: var(--accent); margin-top: 3px; font-weight: 500; }
-  .badge { display: inline-block; padding: 4px 11px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-  .badge-green  { background: rgba(63,185,80,.15);  color: var(--success); border: 1px solid rgba(63,185,80,.3); }
-  .badge-yellow { background: rgba(227,179,65,.15); color: var(--warn); border: 1px solid rgba(227,179,65,.3); }
-  .badge-red    { background: rgba(248,81,73,.15);  color: var(--danger); border: 1px solid rgba(248,81,73,.3); }
+  .goal-repo { font-size: 12px; color: var(--text-2); margin-top: 3px; }
+  .goal-repo b { color: var(--accent); font-weight: 500; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .badge-ok    { background: rgba(34,197,94,.12);  color: var(--success); border: 1px solid rgba(34,197,94,.3); }
+  .badge-warn  { background: rgba(245,158,11,.12); color: var(--warn); border: 1px solid rgba(245,158,11,.3); }
+  .badge-late  { background: rgba(239,68,68,.12);  color: var(--danger); border: 1px solid rgba(239,68,68,.3); }
 
   /* ── Sprint ──────────────────────────────────────────────── */
-  .sprint-box { background: linear-gradient(135deg, rgba(227,179,65,.1), rgba(255,166,87,.05)); border: 1px solid rgba(227,179,65,.3); border-radius: var(--radius-sm); padding: 16px 18px; }
-  .sprint-goal { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
-  .sprint-meta { font-size: 12px; color: var(--text-dim); }
-  .sprint-bar-wrap { background: rgba(0,0,0,.25); border-radius: 4px; height: 6px; margin-top: 12px; overflow: hidden; }
-  .sprint-bar { background: linear-gradient(90deg, var(--warn), var(--orange)); height: 100%; border-radius: 4px; transition: width .6s ease; }
+  .sprint-box { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px 18px; }
+  .sprint-goal { font-size: 14px; font-weight: 600; margin-bottom: 4px; color: var(--text); }
+  .sprint-meta { font-size: 12px; color: var(--text-2); }
+  .sprint-bar-wrap { background: var(--surface-3); border-radius: 999px; height: 4px; margin-top: 12px; overflow: hidden; }
+  .sprint-bar { background: var(--accent); height: 100%; border-radius: 999px; transition: width .6s ease; }
+
+  /* ── Inputs / buttons ────────────────────────────────────── */
+  input[type=text], input[type=number], input[type=date], textarea, select {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 10px 13px; color: var(--text);
+    font-size: 14px; font-family: inherit; outline: none;
+    transition: border-color .12s, box-shadow .12s;
+    width: 100%;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  textarea { resize: vertical; min-height: 70px; line-height: 1.5; }
+
+  .btn {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 9px 16px;
+    color: var(--text); cursor: pointer; font-size: 13px;
+    font-family: inherit; font-weight: 500; transition: all .12s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--border-hi); background: var(--surface-3); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+  .btn-primary:hover:not(:disabled) { background: #5557e6; border-color: #5557e6; }
+  .btn-ghost { background: transparent; border-color: var(--border); }
+  .btn-ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
 
   /* ── Ask AI ──────────────────────────────────────────────── */
-  .ask-row { display: flex; gap: 10px; margin-bottom: 14px; }
-  .ask-row input {
-    flex: 1; background: var(--bg-deep); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 12px 16px; color: var(--text);
-    font-size: 14px; font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
-  }
-  .ask-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(88,166,255,.12); }
-  .ask-row button {
-    background: linear-gradient(135deg, #2ea043, var(--success));
-    border: none; border-radius: var(--radius-sm); padding: 12px 22px;
-    color: white; cursor: pointer; font-size: 14px; font-weight: 600;
-    white-space: nowrap; transition: transform .15s, box-shadow .15s;
-  }
-  .ask-row button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(63,185,80,.35); }
-  .quick-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .ask-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .ask-row input { flex: 1; }
+  .quick-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
   .quick-btn {
-    background: var(--bg-soft); border: 1px solid var(--border); border-radius: 18px;
-    padding: 7px 14px; color: var(--text-dim); cursor: pointer; font-size: 12px;
-    font-family: inherit; font-weight: 500; transition: all .15s;
+    background: transparent; border: 1px solid var(--border); border-radius: 999px;
+    padding: 6px 12px; color: var(--text-2); cursor: pointer; font-size: 12px;
+    font-family: inherit; transition: all .12s;
   }
-  .quick-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(88,166,255,.08); }
-  #ai-response {
-    background: var(--bg-deep); border: 1px solid var(--border); border-radius: var(--radius-sm);
-    padding: 18px; white-space: pre-wrap; line-height: 1.75; font-size: 14px;
-    display: none; color: var(--text);
+  .quick-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .ai-output {
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 16px 18px; white-space: pre-wrap; line-height: 1.7; font-size: 13.5px;
+    color: var(--text);
   }
+  .ai-output:empty { display: none; }
+
+  /* ── Insights cards (4-up) ───────────────────────────────── */
+  .insights-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .insight-card {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 16px 18px; cursor: pointer;
+    transition: all .12s;
+  }
+  .insight-card:hover { border-color: var(--accent); background: var(--surface-3); }
+  .insight-card .ico { font-size: 18px; margin-bottom: 8px; }
+  .insight-card h4 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .insight-card p  { font-size: 12px; color: var(--text-2); line-height: 1.5; }
+  .insight-card.loading { opacity: .6; }
+  .insight-output { margin-top: 12px; }
 
   /* ── Loading shimmer ─────────────────────────────────────── */
-  .loading-shimmer { background: linear-gradient(90deg, var(--bg-soft) 25%, #2d333b 50%, var(--bg-soft) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 6px; height: 14px; margin: 8px 0; }
+  .loading-shimmer { background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; height: 12px; margin: 7px 0; }
   @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 
   /* ── Smart Commit launcher ───────────────────────────────── */
   .commit-launcher {
-    background:
-      radial-gradient(ellipse at top right, rgba(124,92,255,.18), transparent 60%),
-      linear-gradient(135deg, rgba(63,185,80,.18), rgba(88,166,255,.12));
-    border: 1px solid rgba(63,185,80,.4); border-radius: var(--radius);
-    padding: 22px 26px; display: flex; align-items: center; gap: 18px;
-    position: relative; overflow: hidden;
-    box-shadow: 0 4px 24px rgba(63,185,80,.08);
+    background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 22px; display: flex; align-items: center; gap: 16px;
+    margin-bottom: 20px;
+    transition: border-color .15s;
   }
+  .commit-launcher:hover { border-color: var(--border-hi); }
   .commit-launcher .icon-box {
-    width: 48px; height: 48px; border-radius: 12px;
-    background: linear-gradient(135deg, var(--success), #2ea043);
+    width: 38px; height: 38px; border-radius: 9px;
+    background: var(--accent-soft); border: 1px solid var(--accent-line);
     display: flex; align-items: center; justify-content: center;
-    font-size: 24px; box-shadow: 0 6px 16px rgba(63,185,80,.4); flex-shrink: 0;
+    font-size: 18px; flex-shrink: 0;
   }
   .commit-launcher .left { flex: 1; }
-  .commit-launcher h3 { font-size: 17px; font-weight: 700; margin-bottom: 4px; color: var(--text); letter-spacing: -.01em; }
-  .commit-launcher p { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
-  .commit-launcher button {
-    background: linear-gradient(135deg, #2ea043, var(--success));
-    border: none; border-radius: var(--radius-sm); padding: 13px 26px;
-    color: white; cursor: pointer; font-size: 14px; font-weight: 700;
-    white-space: nowrap; transition: transform .15s, box-shadow .15s;
-    box-shadow: 0 4px 14px rgba(63,185,80,.35);
+  .commit-launcher h3 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 2px; letter-spacing: -.01em; }
+  .commit-launcher p  { font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+  .commit-launcher button { padding: 9px 18px; }
+
+  /* ── Form rows ───────────────────────────────────────────── */
+  .form-row { display: grid; gap: 10px; margin-bottom: 14px; }
+  .form-row.cols-2 { grid-template-columns: 1fr 1fr; }
+  .form-label { font-size: 12px; color: var(--text-2); margin-bottom: 6px; font-weight: 500; }
+
+  /* ── Toast ───────────────────────────────────────────────── */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 200;
+    background: var(--surface-3); border: 1px solid var(--border-hi);
+    border-radius: var(--radius-sm); padding: 12px 16px;
+    font-size: 13px; color: var(--text); box-shadow: var(--shadow-lg);
+    transform: translateY(100px); opacity: 0; transition: all .25s;
   }
-  .commit-launcher button:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(63,185,80,.5); }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.ok    { border-left: 3px solid var(--success); }
+  .toast.err   { border-left: 3px solid var(--danger); }
 
   /* ── Wizard modal ────────────────────────────────────────── */
   .wiz-overlay {
     display: none; position: fixed; inset: 0;
-    background: rgba(5,8,12,.75); backdrop-filter: blur(6px);
+    background: rgba(5,7,10,.78); backdrop-filter: blur(6px);
     z-index: 100; padding: 24px; overflow-y: auto;
-    animation: fadeIn .2s ease;
+    animation: fadeIn .18s ease;
   }
   .wiz-overlay.open { display: block; }
   @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
   .wiz-modal {
-    max-width: 780px; margin: 24px auto;
-    background: var(--bg-card); border: 1px solid var(--border-hi);
-    border-radius: 16px; padding: 0; box-shadow: var(--shadow-lg);
-    animation: slideUp .25s ease;
+    max-width: 760px; margin: 24px auto;
+    background: var(--surface); border: 1px solid var(--border-hi);
+    border-radius: var(--radius-lg); padding: 0; box-shadow: var(--shadow-lg);
+    animation: slideUp .22s ease;
   }
-  @keyframes slideUp { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: translateY(0) } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
   .wiz-head {
-    padding: 20px 26px; border-bottom: 1px solid var(--border);
+    padding: 18px 24px; border-bottom: 1px solid var(--border);
     display: flex; align-items: center; gap: 12px;
   }
   .wiz-head .ico {
-    width: 36px; height: 36px; border-radius: 10px;
-    background: linear-gradient(135deg, var(--success), #2ea043);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px; box-shadow: 0 4px 12px rgba(63,185,80,.35);
+    width: 30px; height: 30px; border-radius: 8px;
+    background: var(--accent-soft); border: 1px solid var(--accent-line);
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
   }
-  .wiz-head h2 { font-size: 17px; color: var(--text); font-weight: 700; flex: 1; letter-spacing: -.01em; }
+  .wiz-head h2 { font-size: 15px; color: var(--text); font-weight: 600; flex: 1; letter-spacing: -.01em; }
   .wiz-close {
-    background: transparent; border: none; color: var(--text-dim);
-    font-size: 22px; cursor: pointer; padding: 0; width: 32px; height: 32px;
-    border-radius: 8px; display: flex; align-items: center; justify-content: center;
-    transition: all .15s;
+    background: transparent; border: none; color: var(--text-2);
+    font-size: 20px; cursor: pointer; padding: 0; width: 28px; height: 28px;
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    transition: all .12s;
   }
-  .wiz-close:hover { color: var(--text); background: var(--bg-soft); }
+  .wiz-close:hover { color: var(--text); background: var(--surface-2); }
 
-  /* ── Wizard step indicator (numbered circles) ─────────────── */
   .wiz-steps {
     display: flex; align-items: flex-start; justify-content: space-between;
-    padding: 22px 32px 18px; background: var(--bg-deep);
+    padding: 18px 28px 14px; background: var(--bg);
     border-bottom: 1px solid var(--border); gap: 4px;
   }
-  .wiz-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; position: relative; min-width: 0; }
+  .wiz-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; min-width: 0; }
   .wiz-step:not(:last-child)::after {
-    content: ''; position: absolute; top: 13px; left: calc(50% + 18px); right: calc(-50% + 18px);
-    height: 2px; background: var(--border); transition: background .3s;
+    content: ''; position: absolute; top: 11px; left: calc(50% + 14px); right: calc(-50% + 14px);
+    height: 1.5px; background: var(--border); transition: background .25s;
   }
-  .wiz-step.done:not(:last-child)::after { background: var(--success); }
+  .wiz-step.done:not(:last-child)::after { background: var(--accent); }
   .wiz-step .circle {
-    width: 28px; height: 28px; border-radius: 50%;
-    background: var(--bg-soft); border: 2px solid var(--border);
-    color: var(--text-faint); font-size: 12px; font-weight: 700;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--surface-2); border: 1.5px solid var(--border);
+    color: var(--text-3); font-size: 11px; font-weight: 600;
     display: flex; align-items: center; justify-content: center;
-    transition: all .25s; z-index: 2; position: relative;
+    transition: all .2s; z-index: 2; position: relative;
   }
-  .wiz-step .label { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; text-align: center; max-width: 80px; line-height: 1.2; }
-  .wiz-step.active .circle { background: var(--accent); border-color: var(--accent); color: white; box-shadow: 0 0 0 4px rgba(88,166,255,.18); }
-  .wiz-step.active .label { color: var(--accent); }
-  .wiz-step.done .circle { background: var(--success); border-color: var(--success); color: white; }
-  .wiz-step.done .label { color: var(--text-dim); }
+  .wiz-step .label { font-size: 10px; color: var(--text-3); font-weight: 500; text-align: center; max-width: 70px; line-height: 1.2; }
+  .wiz-step.active .circle { background: var(--accent); border-color: var(--accent); color: white; box-shadow: 0 0 0 4px var(--accent-soft); }
+  .wiz-step.active .label { color: var(--text); }
+  .wiz-step.done .circle { background: var(--accent); border-color: var(--accent); color: white; }
+  .wiz-step.done .label { color: var(--text-2); }
 
-  .wiz-body { padding: 28px 30px; min-height: 260px; }
-  .wiz-body h3 { font-size: 16px; color: var(--text); margin-bottom: 6px; font-weight: 700; letter-spacing: -.01em; }
-  .wiz-body .hint { font-size: 13px; color: var(--text-dim); margin-bottom: 18px; line-height: 1.5; }
-  .wiz-body .hint code { background: var(--bg-soft); padding: 2px 6px; border-radius: 4px; font-size: 12px; color: var(--text); }
-  .wiz-body label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 8px; font-weight: 500; }
-  .wiz-body input[type=text], .wiz-body textarea, .wiz-body select {
-    width: 100%; background: var(--bg-deep); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 11px 14px; color: var(--text);
-    font-size: 14px; font-family: inherit; outline: none; transition: all .15s;
-  }
-  .wiz-body input[type=text]:focus, .wiz-body textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(88,166,255,.12); }
-  .wiz-body textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+  .wiz-body { padding: 24px 26px; min-height: 240px; }
+  .wiz-body h3 { font-size: 14px; color: var(--text); margin-bottom: 6px; font-weight: 600; letter-spacing: -.01em; }
+  .wiz-body .hint { font-size: 12.5px; color: var(--text-2); margin-bottom: 16px; line-height: 1.55; }
+  .wiz-body .hint code { background: var(--surface-3); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; color: var(--text); }
+  .wiz-body label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 6px; font-weight: 500; }
 
   .wiz-foot {
-    padding: 18px 26px; border-top: 1px solid var(--border);
+    padding: 14px 24px; border-top: 1px solid var(--border);
     display: flex; justify-content: space-between; gap: 10px;
-    background: var(--bg-deep); border-radius: 0 0 16px 16px;
+    background: var(--bg); border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
-  .wiz-btn {
-    background: var(--bg-soft); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 10px 20px;
-    color: var(--text-dim); cursor: pointer; font-size: 13px;
-    font-family: inherit; font-weight: 600; transition: all .15s;
-  }
-  .wiz-btn:hover:not(:disabled) { border-color: var(--border-hi); color: var(--text); }
-  .wiz-btn-primary {
-    background: linear-gradient(135deg, #2ea043, var(--success));
-    border-color: transparent; color: white;
-    box-shadow: 0 2px 8px rgba(63,185,80,.3);
-  }
-  .wiz-btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(63,185,80,.45); }
-  .wiz-btn-danger { background: linear-gradient(135deg, #b62324, var(--danger)); border-color: transparent; color: white; }
-  .wiz-btn:disabled { opacity: .45; cursor: not-allowed; }
 
   /* ── Repo cards in wizard ────────────────────────────────── */
   .repo-card {
-    background: var(--bg-deep); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 10px;
-    cursor: pointer; display: flex; align-items: center; gap: 14px;
-    transition: all .15s;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 8px;
+    cursor: pointer; display: flex; align-items: center; gap: 12px;
+    transition: all .12s;
   }
-  .repo-card:hover { border-color: var(--border-hi); background: rgba(88,166,255,.04); }
-  .repo-card.selected { border-color: var(--accent); background: rgba(88,166,255,.1); box-shadow: 0 0 0 3px rgba(88,166,255,.12); }
-  .repo-card .nm { font-weight: 600; font-size: 14px; color: var(--text); }
-  .repo-card .pth { font-size: 11px; color: var(--text-faint); margin-top: 3px; font-family: 'JetBrains Mono', Consolas, monospace; }
-  .repo-card .tag { font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 600; }
-  .tag-github { background: rgba(63,185,80,.15); color: var(--success); border: 1px solid rgba(63,185,80,.35); }
-  .tag-local  { background: rgba(227,179,65,.15); color: var(--warn); border: 1px solid rgba(227,179,65,.35); }
+  .repo-card:hover { border-color: var(--border-hi); }
+  .repo-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+  .repo-card .nm { font-weight: 600; font-size: 13.5px; color: var(--text); }
+  .repo-card .pth { font-size: 11px; color: var(--text-3); margin-top: 2px; font-family: 'JetBrains Mono', Consolas, monospace; }
+  .repo-card .tag { font-size: 10.5px; padding: 2px 9px; border-radius: 10px; font-weight: 500; }
+  .tag-github { background: rgba(34,197,94,.1); color: var(--success); border: 1px solid rgba(34,197,94,.3); }
+  .tag-local  { background: var(--surface-3); color: var(--text-2); border: 1px solid var(--border); }
 
   /* ── File list ───────────────────────────────────────────── */
   .file-list {
-    background: var(--bg-deep); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 12px 16px; max-height: 200px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 10px 14px; max-height: 200px;
     overflow-y: auto; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px;
   }
-  .file-list .f { padding: 3px 0; color: var(--text); display: flex; align-items: center; gap: 8px; }
-  .file-list .f .x {
-    color: var(--success); font-weight: 700; min-width: 14px; text-align: center;
-    font-size: 11px;
-  }
+  .file-list .f { padding: 2px 0; color: var(--text); display: flex; align-items: center; gap: 8px; }
+  .file-list .f .x { color: var(--accent); font-weight: 600; min-width: 14px; text-align: center; font-size: 11px; }
 
   /* ── Status pills ────────────────────────────────────────── */
-  .status-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .status-row { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
   .pill {
-    padding: 6px 13px; border-radius: 20px; font-size: 12px;
-    background: var(--bg-soft); border: 1px solid var(--border);
+    padding: 5px 11px; border-radius: 999px; font-size: 11.5px;
+    background: var(--surface-2); border: 1px solid var(--border);
     color: var(--text); font-weight: 500;
   }
-  .pill .k { color: var(--text-dim); margin-right: 4px; }
-  .pill.ok    { color: var(--success); border-color: rgba(63,185,80,.35); background: rgba(63,185,80,.1); }
-  .pill.warn  { color: var(--warn); border-color: rgba(227,179,65,.35); background: rgba(227,179,65,.1); }
+  .pill .k { color: var(--text-2); margin-right: 4px; }
+  .pill.ok    { color: var(--success); border-color: rgba(34,197,94,.3); background: rgba(34,197,94,.08); }
+  .pill.warn  { color: var(--warn); border-color: rgba(245,158,11,.3); background: rgba(245,158,11,.08); }
 
   /* ── Security findings ───────────────────────────────────── */
-  .scan-block { border-radius: var(--radius-sm); padding: 16px; margin-bottom: 12px; }
-  .scan-block.danger  { background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.4); }
-  .scan-block.warn    { background: rgba(227,179,65,.08); border: 1px solid rgba(227,179,65,.4); }
-  .scan-block.ok      { background: rgba(63,185,80,.08); border: 1px solid rgba(63,185,80,.35); }
-  .scan-block .title  { font-weight: 700; font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .scan-block { border-radius: var(--radius-sm); padding: 14px; margin-bottom: 10px; }
+  .scan-block.danger  { background: rgba(239,68,68,.06); border: 1px solid rgba(239,68,68,.3); }
+  .scan-block.warn    { background: rgba(245,158,11,.06); border: 1px solid rgba(245,158,11,.3); }
+  .scan-block.ok      { background: rgba(34,197,94,.05); border: 1px solid rgba(34,197,94,.25); }
+  .scan-block .title  { font-weight: 600; font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
   .scan-block.danger .title { color: var(--danger); }
   .scan-block.warn .title   { color: var(--warn); }
   .scan-block.ok .title     { color: var(--success); }
-  .finding { font-size: 12px; padding: 8px 0; border-top: 1px dashed rgba(255,255,255,.08); line-height: 1.5; }
+  .finding { font-size: 12px; padding: 7px 0; border-top: 1px dashed var(--border); line-height: 1.5; }
   .finding:first-of-type { border-top: none; padding-top: 0; }
-  .finding code { background: rgba(0,0,0,.25); padding: 2px 5px; border-radius: 3px; font-family: 'JetBrains Mono', Consolas, monospace; }
-  .finding .ln { color: var(--text-dim); font-family: 'JetBrains Mono', Consolas, monospace; }
+  .finding code { background: var(--bg); padding: 2px 5px; border-radius: 3px; }
+  .finding .ln { color: var(--text-2); font-family: 'JetBrains Mono', Consolas, monospace; }
   .finding .arrow { color: var(--warn); margin-top: 4px; }
 
   .gen-msg {
-    background: linear-gradient(135deg, rgba(63,185,80,.1), rgba(88,166,255,.06));
-    border: 1px solid rgba(63,185,80,.35); border-radius: var(--radius-sm);
-    padding: 16px 18px; margin-bottom: 14px; font-weight: 600; font-size: 14px; color: var(--text);
-    line-height: 1.5;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-left: 2px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px; margin-bottom: 12px; font-weight: 500; font-size: 13.5px; color: var(--text);
+    line-height: 1.55;
   }
 
-  .wiz-success { text-align: center; padding: 36px 0 16px; }
-  .wiz-success .ico { font-size: 56px; margin-bottom: 14px; animation: bounce .5s ease; }
-  @keyframes bounce { 0%{transform:scale(.6)} 60%{transform:scale(1.15)} 100%{transform:scale(1)} }
-  .wiz-success h3 { font-size: 20px; color: var(--success); margin-bottom: 10px; font-weight: 700; }
+  .wiz-success { text-align: center; padding: 28px 0 12px; }
+  .wiz-success .ico { font-size: 40px; margin-bottom: 12px; }
+  .wiz-success h3 { font-size: 17px; color: var(--text); margin-bottom: 10px; font-weight: 600; }
   .wiz-success a {
     color: var(--accent); text-decoration: none; word-break: break-all;
-    background: var(--bg-soft); padding: 6px 12px; border-radius: 6px;
-    display: inline-block; font-size: 13px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 6px;
+    display: inline-block; font-size: 12.5px;
+    font-family: 'JetBrains Mono', Consolas, monospace;
   }
-  .wiz-success a:hover { background: var(--bg-deep); text-decoration: underline; }
+  .wiz-success a:hover { border-color: var(--accent); }
 
   .wiz-error {
-    background: rgba(248,81,73,.1); border: 1px solid rgba(248,81,73,.4);
-    border-radius: var(--radius-sm); padding: 13px 15px; color: var(--danger);
-    font-size: 13px; margin-bottom: 12px; line-height: 1.5;
+    background: rgba(239,68,68,.07); border: 1px solid rgba(239,68,68,.35);
+    border-radius: var(--radius-sm); padding: 11px 13px; color: var(--danger);
+    font-size: 12.5px; margin-bottom: 10px; line-height: 1.5;
   }
 
-  .radio-row { display: flex; gap: 16px; margin-top: 8px; }
-  .radio-row label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--text); margin: 0; }
+  .radio-row { display: flex; gap: 14px; margin-top: 6px; }
+  .radio-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--text); margin: 0; }
   .radio-row input[type=radio] { accent-color: var(--accent); }
 
   /* ── Responsive ──────────────────────────────────────────── */
   @media (max-width: 768px) {
     .stats-grid { grid-template-columns: 1fr 1fr; }
     .row2 { grid-template-columns: 1fr; }
+    .insights-grid { grid-template-columns: 1fr; }
+    .form-row.cols-2 { grid-template-columns: 1fr; }
     .container { padding: 18px; }
-    .header { padding: 14px 18px; }
-    .commit-launcher { flex-direction: column; text-align: center; align-items: stretch; }
+    .header { padding: 12px 18px; }
+    .commit-launcher { flex-direction: column; align-items: stretch; text-align: center; }
     .commit-launcher button { width: 100%; }
-    .wiz-steps { padding: 18px 12px 14px; }
-    .wiz-step .label { font-size: 9px; max-width: 60px; }
-    .wiz-body { padding: 22px 20px; }
+    .wiz-steps { padding: 14px 12px 12px; }
+    .wiz-step .label { font-size: 9px; max-width: 56px; }
+    .wiz-body { padding: 20px 18px; }
   }
 </style>
 </head>
@@ -429,98 +456,192 @@ HTML = '''<!DOCTYPE html>
 
   <!-- Stats -->
   <div class="stats-grid">
-    <div class="stat-card s-commits">
-      <div class="val" id="s-commits" style="color:#58a6ff">—</div>
+    <div class="stat-card">
       <div class="lbl">Commits this week</div>
-      <div class="sub" id="s-commits-sub"></div>
+      <div class="val" id="s-commits">—</div>
+      <div class="sub" id="s-commits-sub">past 7 days</div>
     </div>
-    <div class="stat-card s-streak">
-      <div class="val" id="s-streak" style="color:#ffa657">—</div>
-      <div class="lbl">Day streak 🔥</div>
-      <div class="sub" id="s-streak-sub"></div>
+    <div class="stat-card">
+      <div class="lbl">Day streak</div>
+      <div class="val" id="s-streak">—</div>
+      <div class="sub" id="s-streak-sub">days in a row</div>
     </div>
-    <div class="stat-card s-repos">
-      <div class="val" id="s-repos" style="color:#3fb950">—</div>
+    <div class="stat-card">
       <div class="lbl">Active repos</div>
+      <div class="val" id="s-repos">—</div>
       <div class="sub" id="s-repos-sub"></div>
     </div>
-    <div class="stat-card s-files">
-      <div class="val" id="s-files" style="color:#d2a8ff">—</div>
+    <div class="stat-card">
       <div class="lbl">Files changed</div>
-      <div class="sub" id="s-files-sub"></div>
+      <div class="val" id="s-files">—</div>
+      <div class="sub" id="s-files-sub">unique files</div>
     </div>
   </div>
 
-  <!-- Smart Commit & Deploy launcher -->
-  <div style="margin-bottom:18px">
-    <div class="commit-launcher">
-      <div class="icon-box">🚀</div>
-      <div class="left">
-        <h3>Smart Commit &amp; Deploy</h3>
-        <p>Scan secrets · auto-fix · generate AI message · commit · push (or create new GitHub repo)</p>
-      </div>
-      <button onclick="wizOpen()">Start →</button>
+  <!-- Smart Commit launcher -->
+  <div class="commit-launcher">
+    <div class="icon-box">⚡</div>
+    <div class="left">
+      <h3>Smart Commit &amp; Deploy</h3>
+      <p>Scan secrets · auto-fix · generate AI message · commit · push or create GitHub repo</p>
     </div>
+    <button class="btn btn-primary" onclick="wizOpen()">Start</button>
   </div>
 
   <!-- Sprint (shown if active) -->
   <div class="section" id="sprint-section" style="display:none">
-    <div class="section-title">🏃 Active Sprint</div>
+    <div class="section-title">Active sprint</div>
     <div class="sprint-box">
       <div class="sprint-goal" id="sprint-goal"></div>
       <div class="sprint-meta" id="sprint-meta"></div>
       <div class="sprint-bar-wrap"><div class="sprint-bar" id="sprint-bar" style="width:0%"></div></div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn btn-sm btn-ghost" onclick="closeSprint()">Close sprint &amp; generate retro</button>
+      </div>
     </div>
   </div>
 
-  <!-- Ask AI -->
-  <div class="section">
-    <div class="section-title">🤖 Ask AI About Your Work</div>
-    <div class="ask-row">
-      <input type="text" id="ask-input" placeholder="e.g. What did I work on this week? What should I focus on next?" onkeydown="if(event.key==='Enter')askAI()">
-      <button onclick="askAI()">Ask →</button>
-    </div>
-    <div class="quick-btns">
-      <button class="quick-btn" onclick="quickAsk('Summarize what I worked on this week')">📅 This week</button>
-      <button class="quick-btn" onclick="quickAsk('What should I work on next?')">🎯 Next tasks</button>
-      <button class="quick-btn" onclick="quickAsk('Which repo needs the most attention right now?')">🔥 Focus area</button>
-      <button class="quick-btn" onclick="quickAsk('Analyze my productivity patterns and when I code most')">📊 Productivity</button>
-      <button class="quick-btn" onclick="quickAsk('Are there any repos I have been neglecting?')">⚠️ Stalled repos</button>
-    </div>
-    <div id="ai-response"></div>
-  </div>
-
+  <!-- Two column: Commits + Calendar -->
   <div class="row2">
-    <!-- Commits -->
     <div class="section">
-      <div class="section-title">💬 Recent Commits <span style="margin-left:auto;font-size:11px;color:#484f58" id="commits-count"></span></div>
-      <div id="commits-list"><div class="loading-shimmer"></div><div class="loading-shimmer" style="width:70%"></div><div class="loading-shimmer" style="width:85%"></div></div>
+      <div class="section-title">
+        Recent commits
+        <span class="right" id="commits-count"></span>
+      </div>
+      <div id="commits-list">
+        <div class="loading-shimmer"></div>
+        <div class="loading-shimmer" style="width:70%"></div>
+        <div class="loading-shimmer" style="width:85%"></div>
+      </div>
     </div>
 
-    <!-- Calendar -->
     <div class="section">
-      <div class="section-title">📅 Activity — Last 35 Days</div>
+      <div class="section-title">
+        Contribution activity
+        <span class="right" id="cal-summary">last 35 days</span>
+      </div>
       <div class="cal-header">
         <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
       </div>
       <div class="cal-grid" id="cal-grid"></div>
       <div class="cal-legend">
-        <span><i style="background:#3fb950"></i> Committed</span>
-        <span><i style="background:#f78166"></i> Skipped</span>
-        <span><i style="background:#d29922"></i> Pending</span>
-        <span><i style="background:#21262d"></i> No data</span>
+        <span>Less</span>
+        <div class="scale">
+          <i class="cal-l0"></i><i class="cal-l1"></i><i class="cal-l2"></i><i class="cal-l3"></i><i class="cal-l4"></i>
+        </div>
+        <span>More</span>
       </div>
-      <div style="margin-top:12px;font-size:12px;color:#8b949e" id="cal-summary"></div>
     </div>
+  </div>
+
+  <!-- Ask AI -->
+  <div class="section">
+    <div class="section-title">Ask AI</div>
+    <div class="section-sub">Ask anything about your work — it sees your commits, files, and context.</div>
+    <div class="ask-row">
+      <input type="text" id="ask-input" placeholder="What did I work on this week? What should I focus on next?" onkeydown="if(event.key==='Enter')askAI()">
+      <button class="btn btn-primary" onclick="askAI()">Ask</button>
+    </div>
+    <div class="quick-btns">
+      <button class="quick-btn" onclick="quickAsk('Summarize what I worked on this week')">This week</button>
+      <button class="quick-btn" onclick="quickAsk('What should I work on next?')">Next tasks</button>
+      <button class="quick-btn" onclick="quickAsk('Which repo needs the most attention right now?')">Focus area</button>
+      <button class="quick-btn" onclick="quickAsk('Are there any repos I have been neglecting?')">Stalled repos</button>
+    </div>
+    <div class="ai-output" id="ai-response"></div>
+  </div>
+
+  <!-- AI Insights -->
+  <div class="section">
+    <div class="section-title">AI insights</div>
+    <div class="section-sub">Click a card to generate an analysis from your recent activity.</div>
+    <div class="insights-grid">
+      <div class="insight-card" onclick="loadInsight('summary', this)">
+        <div class="ico">▦</div>
+        <h4>Weekly summary</h4>
+        <p>What you shipped this week, in one paragraph.</p>
+        <div class="insight-output" id="insight-summary"></div>
+      </div>
+      <div class="insight-card" onclick="loadInsight('suggestions', this)">
+        <div class="ico">→</div>
+        <h4>Suggested next tasks</h4>
+        <p>What to tackle next based on momentum &amp; gaps.</p>
+        <div class="insight-output" id="insight-suggestions"></div>
+      </div>
+      <div class="insight-card" onclick="loadInsight('productivity', this)">
+        <div class="ico">∿</div>
+        <h4>Productivity patterns</h4>
+        <p>When you ship most, where you stall.</p>
+        <div class="insight-output" id="insight-productivity"></div>
+      </div>
+      <div class="insight-card" onclick="loadInsight('blockers', this)">
+        <div class="ico">!</div>
+        <h4>Stalled repos</h4>
+        <p>Projects that have gone quiet.</p>
+        <div class="insight-output" id="insight-blockers"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sprint manager (always visible) -->
+  <div class="section" id="sprint-manager">
+    <div class="section-title">Sprints</div>
+    <div id="sprint-empty" style="display:none">
+      <div class="section-sub">No active sprint. Start one to focus your week.</div>
+      <div class="form-row cols-2">
+        <div>
+          <div class="form-label">Sprint goal</div>
+          <input type="text" id="sprint-goal-input" placeholder="e.g. ship the dashboard refresh">
+        </div>
+        <div>
+          <div class="form-label">Days</div>
+          <input type="number" id="sprint-days-input" value="7" min="1" max="60">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="startSprint()">Start sprint</button>
+    </div>
+    <div id="sprint-active-msg" style="display:none;font-size:13px;color:var(--text-2)">Active sprint shown above.</div>
   </div>
 
   <!-- Goals -->
   <div class="section">
-    <div class="section-title">🎯 Active Goals</div>
-    <div id="goals-list"><div class="loading-shimmer" style="width:60%"></div></div>
+    <div class="section-title">
+      Goals
+      <button class="btn btn-sm btn-ghost" onclick="toggleGoalForm()" id="goal-toggle-btn">+ Add goal</button>
+    </div>
+
+    <div id="goal-form" style="display:none;margin-bottom:18px">
+      <div class="form-row cols-2">
+        <div>
+          <div class="form-label">Repo</div>
+          <input type="text" id="goal-repo" placeholder="repo-name">
+        </div>
+        <div>
+          <div class="form-label">Deadline</div>
+          <input type="date" id="goal-deadline">
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <div class="form-label">Description</div>
+          <input type="text" id="goal-desc" placeholder="What do you want to ship?">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" onclick="addGoal()">Save goal</button>
+        <button class="btn btn-sm" onclick="toggleGoalForm()">Cancel</button>
+      </div>
+    </div>
+
+    <div id="goals-list">
+      <div class="loading-shimmer" style="width:60%"></div>
+    </div>
   </div>
 
 </div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
 
 <!-- ── Smart Commit Wizard ─────────────────────────────────── -->
 <div class="wiz-overlay" id="wiz-overlay">
@@ -549,13 +670,32 @@ HTML = '''<!DOCTYPE html>
 <script>
 const today = new Date().toISOString().split('T')[0];
 
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toast(msg, kind) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (kind || 'ok');
+  setTimeout(() => { t.classList.remove('show'); }, 2400);
+}
+
+function intensityClass(count) {
+  if (!count) return 'cal-l0';
+  if (count <= 1) return 'cal-l1';
+  if (count <= 3) return 'cal-l2';
+  if (count <= 6) return 'cal-l3';
+  return 'cal-l4';
+}
+
 async function loadDashboard() {
   let d;
   try {
     const r = await fetch('/api/dashboard');
     d = await r.json();
   } catch(e) {
-    document.getElementById('last-updated').textContent = 'Connection error — retrying...';
+    document.getElementById('last-updated').textContent = 'Connection error';
     return;
   }
 
@@ -564,119 +704,210 @@ async function loadDashboard() {
 
   // Stats
   document.getElementById('s-commits').textContent = d.stats.commits;
-  document.getElementById('s-commits-sub').textContent = 'past 7 days';
   document.getElementById('s-streak').textContent = d.stats.streak;
-  document.getElementById('s-streak-sub').textContent = d.stats.streak === 1 ? 'day' : 'days in a row';
+  document.getElementById('s-streak-sub').textContent = d.stats.streak === 1 ? 'day in a row' : 'days in a row';
   document.getElementById('s-repos').textContent = d.stats.repos;
-  document.getElementById('s-repos-sub').textContent = d.stats.repo_names ? d.stats.repo_names.slice(0,2).join(', ') : '';
+  document.getElementById('s-repos-sub').textContent = (d.stats.repo_names || []).slice(0, 2).join(', ');
   document.getElementById('s-files').textContent = d.stats.files;
-  document.getElementById('s-files-sub').textContent = 'unique files';
 
   // Sprint
+  const sprintBox = document.getElementById('sprint-section');
+  const sprintEmpty = document.getElementById('sprint-empty');
+  const sprintActiveMsg = document.getElementById('sprint-active-msg');
   if (d.sprint) {
-    document.getElementById('sprint-section').style.display = '';
+    sprintBox.style.display = '';
     document.getElementById('sprint-goal').textContent = d.sprint.goal;
     const dl = d.sprint.days_left;
     document.getElementById('sprint-meta').textContent =
-      dl < 0 ? `Ended ${Math.abs(dl)} day(s) ago — ${d.sprint.end_date}` :
-      dl === 0 ? `Ends today — ${d.sprint.end_date}` :
-      `${dl} day(s) left — ends ${d.sprint.end_date}`;
+      dl < 0 ? `Ended ${Math.abs(dl)} day(s) ago · ${d.sprint.end_date}` :
+      dl === 0 ? `Ends today · ${d.sprint.end_date}` :
+      `${dl} day(s) left · ends ${d.sprint.end_date}`;
     const pct = Math.max(5, Math.min(100, 100 - (dl / d.sprint.total_days * 100)));
     document.getElementById('sprint-bar').style.width = pct + '%';
+    window._activeSprintId = d.sprint.id;
+    if (sprintEmpty) sprintEmpty.style.display = 'none';
+    if (sprintActiveMsg) sprintActiveMsg.style.display = '';
+  } else {
+    sprintBox.style.display = 'none';
+    window._activeSprintId = null;
+    if (sprintEmpty) sprintEmpty.style.display = '';
+    if (sprintActiveMsg) sprintActiveMsg.style.display = 'none';
   }
 
   // Commits
   const cl = document.getElementById('commits-list');
-  document.getElementById('commits-count').textContent = d.commits.length ? d.commits.length + ' commits' : '';
+  document.getElementById('commits-count').textContent = d.commits.length ? `${d.commits.length} this week` : '';
   if (!d.commits.length) {
-    cl.innerHTML = '<div class="empty-state">No commits found in the last 7 days.<br><span style="font-size:11px">Make sure your GitHub username and token are set correctly.</span></div>';
+    cl.innerHTML = '<div class="empty-state">No commits in the last 7 days.<br><span style="font-size:11.5px;color:var(--text-3)">Verify your GitHub token has repo scope.</span></div>';
   } else {
     cl.innerHTML = d.commits.slice(0, 10).map(c => `
       <div class="commit-item">
         <div class="commit-dot"></div>
-        <div>
+        <div style="flex:1;min-width:0">
           <div class="commit-msg">${escHtml(c.message)}</div>
           <div class="commit-meta">
             <span class="commit-repo">${escHtml(c.repo)}</span>
-            &nbsp;·&nbsp; ${c.date}
-            &nbsp;·&nbsp; <span class="commit-sha">${c.sha}</span>
+            <span>·</span><span>${c.date}</span>
+            <span class="commit-sha">${c.sha}</span>
           </div>
         </div>
       </div>`).join('');
   }
 
-  // Calendar — align to week start (Sunday)
+  // Calendar (GitHub-style, intensity by commit count)
   const cg = document.getElementById('cal-grid');
-  const days = d.calendar;
-  // Pad start so first day aligns to correct weekday
-  const firstDay = new Date(days[0].date + 'T00:00:00');
-  const startPad = firstDay.getDay(); // 0=Sun
+  const days = d.calendar || [];
+  const firstDay = days.length ? new Date(days[0].date + 'T00:00:00') : new Date();
+  const startPad = firstDay.getDay();
   let html = '';
   for (let i = 0; i < startPad; i++) html += '<div></div>';
+  let totalCommits = 0, activeDays = 0;
   days.forEach(day => {
+    const count = day.count || 0;
+    if (count > 0) { totalCommits += count; activeDays += 1; }
     const isToday = day.date === today;
-    const label = day.status === 'no_data' ? 'No activity' :
-                  day.status.charAt(0).toUpperCase() + day.status.slice(1);
-    html += `<div class="cal-day cal-${day.status}${isToday ? ' cal-today' : ''}" title="${day.date}: ${label}">
-      <div class="cal-tooltip">${day.date}<br>${label}${day.commit_msg ? '<br><em>' + escHtml(day.commit_msg.slice(0,40)) + '</em>' : ''}</div>
+    const cls = intensityClass(count) +
+      (day.status === 'skipped' ? ' cal-skip' : '') +
+      (isToday ? ' cal-today' : '');
+    const tip = count
+      ? `${count} contribution${count === 1 ? '' : 's'}`
+      : (day.status === 'skipped' ? 'Skipped' : 'No activity');
+    html += `<div class="cal-day ${cls}" title="${day.date}: ${tip}">
+      <div class="cal-tooltip">${day.date}<br>${tip}${day.commit_msg ? '<br>' + escHtml(day.commit_msg.slice(0,40)) : ''}</div>
     </div>`;
   });
   cg.innerHTML = html;
-
-  // Calendar summary
-  const committed = days.filter(d => d.status === 'committed').length;
-  const skipped   = days.filter(d => d.status === 'skipped').length;
-  const noData    = days.filter(d => d.status === 'no_data').length;
   document.getElementById('cal-summary').textContent =
-    `${committed} committed · ${skipped} skipped · ${noData} no data (last 35 days)`;
+    `${totalCommits} contributions · ${activeDays} active days`;
 
   // Goals
-  const gl = document.getElementById('goals-list');
-  if (!d.goals.length) {
-    gl.innerHTML = '<div class="empty-state">No active goals. Add one via the terminal menu.</div>';
-  } else {
-    gl.innerHTML = d.goals.map(g => {
-      const ms   = new Date(g.deadline + 'T00:00:00') - new Date();
-      const days = Math.ceil(ms / 86400000);
-      const cls  = days <= 3 ? 'badge-red' : days <= 7 ? 'badge-yellow' : 'badge-green';
-      const lbl  = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : `${days}d left`;
-      return `<div class="goal-item">
-        <div>
-          <div class="goal-desc">${escHtml(g.description)}</div>
-          <div class="goal-repo">${escHtml(g.repo)} · due ${g.deadline}</div>
-        </div>
-        <span class="badge ${cls}">${lbl}</span>
-      </div>`;
-    }).join('');
-  }
+  renderGoals(d.goals);
 }
 
+function renderGoals(goals) {
+  const gl = document.getElementById('goals-list');
+  if (!goals || !goals.length) {
+    gl.innerHTML = '<div class="empty-state">No active goals.</div>';
+    return;
+  }
+  gl.innerHTML = goals.map(g => {
+    const ms   = new Date(g.deadline + 'T00:00:00') - new Date();
+    const days = Math.ceil(ms / 86400000);
+    const cls  = days < 0 ? 'badge-late' : days <= 3 ? 'badge-late' : days <= 7 ? 'badge-warn' : 'badge-ok';
+    const lbl  = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : `${days}d left`;
+    return `<div class="goal-item">
+      <div>
+        <div class="goal-desc">${escHtml(g.description)}</div>
+        <div class="goal-repo"><b>${escHtml(g.repo)}</b> · due ${g.deadline}</div>
+      </div>
+      <span class="badge ${cls}">${lbl}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ── Ask AI ────────────────────────────────────────────────── */
 async function askAI() {
   const q = document.getElementById('ask-input').value.trim();
   if (!q) return;
   const box = document.getElementById('ai-response');
   box.style.display = 'block';
-  box.textContent = '⏳ Thinking...';
+  box.textContent = 'Thinking…';
   try {
     const r = await fetch('/api/ask', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({question: q})
     });
     const d = await r.json();
     box.textContent = d.answer;
   } catch(e) {
-    box.textContent = '⚠️ Could not reach the server.';
+    box.textContent = 'Could not reach the server.';
   }
 }
-
 function quickAsk(q) {
   document.getElementById('ask-input').value = q;
   askAI();
 }
 
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+/* ── Insights ──────────────────────────────────────────────── */
+async function loadInsight(kind, cardEl) {
+  const out = document.getElementById('insight-' + kind);
+  if (out.dataset.loaded === '1') return; // don't refetch
+  cardEl.classList.add('loading');
+  out.innerHTML = '<div class="loading-shimmer"></div><div class="loading-shimmer" style="width:80%"></div>';
+  try {
+    const r = await fetch('/api/insights/' + kind);
+    const d = await r.json();
+    out.innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'ai-output';
+    div.style.marginTop = '12px';
+    div.textContent = d.answer || 'No data.';
+    out.appendChild(div);
+    out.dataset.loaded = '1';
+  } catch(e) {
+    out.innerHTML = '<div class="wiz-error">Failed to load.</div>';
+  }
+  cardEl.classList.remove('loading');
+}
+
+/* ── Sprint actions ────────────────────────────────────────── */
+async function startSprint() {
+  const goal = document.getElementById('sprint-goal-input').value.trim();
+  const days = parseInt(document.getElementById('sprint-days-input').value, 10) || 7;
+  if (!goal) { toast('Enter a sprint goal', 'err'); return; }
+  const r = await fetch('/api/sprint/start', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({goal, days})
+  });
+  const d = await r.json();
+  if (d.ok) { toast('Sprint started'); loadDashboard(); document.getElementById('sprint-goal-input').value = ''; }
+  else { toast(d.error || 'Failed', 'err'); }
+}
+async function closeSprint() {
+  if (!window._activeSprintId) return;
+  const goalEl = document.getElementById('sprint-goal');
+  const oldText = goalEl.textContent;
+  goalEl.textContent = 'Generating retrospective…';
+  const r = await fetch('/api/sprint/close', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({sprint_id: window._activeSprintId})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    toast('Sprint closed');
+    alert('Sprint Retrospective\n\n' + (d.retro || ''));
+    loadDashboard();
+  } else {
+    goalEl.textContent = oldText;
+    toast(d.error || 'Failed', 'err');
+  }
+}
+
+/* ── Goal actions ──────────────────────────────────────────── */
+function toggleGoalForm() {
+  const f = document.getElementById('goal-form');
+  f.style.display = f.style.display === 'none' ? '' : 'none';
+}
+async function addGoal() {
+  const repo = document.getElementById('goal-repo').value.trim();
+  const desc = document.getElementById('goal-desc').value.trim();
+  const dl   = document.getElementById('goal-deadline').value.trim();
+  if (!repo || !desc || !dl) { toast('Fill all fields', 'err'); return; }
+  const r = await fetch('/api/goal/add', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({repo, description: desc, deadline: dl})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    toast('Goal added');
+    document.getElementById('goal-repo').value = '';
+    document.getElementById('goal-desc').value = '';
+    document.getElementById('goal-deadline').value = '';
+    toggleGoalForm();
+    loadDashboard();
+  } else {
+    toast(d.error || 'Failed', 'err');
+  }
 }
 
 loadDashboard();
@@ -1136,23 +1367,34 @@ def index():
 
 @app.route("/api/dashboard")
 def dashboard():
-    cfg        = load()
-    commits    = gh.fetch_all_recent(7, use_cache=False)
+    cfg = load()
+    # Single live fetch covering the whole calendar window — we slice it for
+    # the 7-day stats so the calendar gets real intensity counts.
+    all_commits = gh.fetch_all_recent(35, use_cache=False)
+    seven_ago = (date.today() - timedelta(days=7)).isoformat()
+    commits = [c for c in all_commits if c["date"] >= seven_ago]
+
     file_stats = {}
     try:
         file_stats = gh.get_file_stats(7)
     except Exception:
         pass
 
+    counts_by_day = {}
+    for c in all_commits:
+        counts_by_day[c["date"]] = counts_by_day.get(c["date"], 0) + 1
+
     stats_db = db.get_stats()
     sprint   = db.get_active_sprint()
     goals    = db.get_active_goals()
     calendar = db.get_calendar(35)
-    repos    = list(set(c["repo"] for c in commits))
+    for d in calendar:
+        d["count"] = counts_by_day.get(d["date"], 0)
+
+    repos = list(set(c["repo"] for c in commits))
 
     sprint_data = None
     if sprint:
-        from datetime import datetime, timedelta
         start      = date.fromisoformat(sprint["start_date"])
         end        = date.fromisoformat(sprint["end_date"])
         total_days = max(1, (end - start).days)
@@ -1174,6 +1416,119 @@ def dashboard():
         "sprint":   sprint_data,
     })
 
+
+# ──────────────────────────────────────────────────────────
+# AI INSIGHTS — surface the terminal menu's AI options
+# ──────────────────────────────────────────────────────────
+def _ctx_for_ai(days: int = 7):
+    commits = gh.fetch_all_recent(days, use_cache=True)
+    try:
+        file_stats = gh.get_file_stats(days)
+    except Exception:
+        file_stats = {}
+    return commits, file_stats
+
+
+@app.route("/api/insights/summary")
+def insight_summary():
+    commits, file_stats = _ctx_for_ai(7)
+    if not commits:
+        return jsonify({"answer": "No commits in the last 7 days to summarise."})
+    return jsonify({"answer": ai.summarize_week(commits, file_stats)})
+
+
+@app.route("/api/insights/suggestions")
+def insight_suggestions():
+    commits, file_stats = _ctx_for_ai(7)
+    return jsonify({"answer": ai.suggest_next_tasks(commits, file_stats)})
+
+
+@app.route("/api/insights/productivity")
+def insight_productivity():
+    cal = db.get_calendar(21)
+    return jsonify({"answer": ai.analyze_productivity(cal)})
+
+
+@app.route("/api/insights/blockers")
+def insight_blockers():
+    commits, _ = _ctx_for_ai(7)
+    cfg = load()
+    try:
+        all_repos = [r["name"] for r in gh.get_repos(cfg.get("github_username", ""))]
+    except Exception:
+        all_repos = list({c["repo"] for c in commits})
+    answer = ai.detect_blockers(commits, all_repos) or "No stalled repos detected."
+    return jsonify({"answer": answer})
+
+
+# ──────────────────────────────────────────────────────────
+# SPRINTS
+# ──────────────────────────────────────────────────────────
+@app.route("/api/sprint/start", methods=["POST"])
+def sprint_start():
+    data = request.get_json() or {}
+    goal = (data.get("goal", "") or "").strip()
+    days = int(data.get("days", 7) or 7)
+    if not goal:
+        return _err("Sprint goal required.")
+    if db.get_active_sprint():
+        return _err("There is already an active sprint. Close it first.")
+    try:
+        sid = db.create_sprint(goal, max(1, min(60, days)))
+        return jsonify({"ok": True, "id": sid})
+    except Exception as e:
+        return _err(e)
+
+
+@app.route("/api/sprint/close", methods=["POST"])
+def sprint_close():
+    data = request.get_json() or {}
+    sid = data.get("sprint_id")
+    sprint = db.get_active_sprint()
+    if not sprint or (sid and sprint["id"] != sid):
+        return _err("No active sprint to close.")
+    commits, _ = _ctx_for_ai(7)
+    try:
+        retro = ai.generate_sprint_retro(sprint, commits)
+        db.close_sprint(sprint["id"], retro)
+        return jsonify({"ok": True, "retro": retro})
+    except Exception as e:
+        return _err(e)
+
+
+# ──────────────────────────────────────────────────────────
+# GOALS
+# ──────────────────────────────────────────────────────────
+@app.route("/api/goal/add", methods=["POST"])
+def goal_add():
+    data = request.get_json() or {}
+    repo = (data.get("repo", "") or "").strip()
+    desc = (data.get("description", "") or "").strip()
+    dl   = (data.get("deadline", "") or "").strip()
+    if not (repo and desc and dl):
+        return _err("repo, description, and deadline are required.")
+    try:
+        date.fromisoformat(dl)
+    except ValueError:
+        return _err("Deadline must be YYYY-MM-DD.")
+    try:
+        gid = db.add_goal(repo, desc, dl)
+        return jsonify({"ok": True, "id": gid})
+    except Exception as e:
+        return _err(e)
+
+
+@app.route("/api/goal/complete", methods=["POST"])
+def goal_complete():
+    gid = (request.get_json() or {}).get("goal_id")
+    if not gid:
+        return _err("goal_id required.")
+    try:
+        db.complete_goal(int(gid))
+        return jsonify({"ok": True})
+    except Exception as e:
+        return _err(e)
+
 @app.route("/api/ask", methods=["POST"])
 def ask():
     data       = request.get_json()
@@ -1191,10 +1546,6 @@ def ask():
 # SMART COMMIT WIZARD — backend endpoints
 # Mirrors the terminal commit_flow.run_commit_flow() step-by-step.
 # ──────────────────────────────────────────────────────────
-
-def _err(msg: str, code: int = 200):
-    return jsonify({"ok": False, "error": str(msg)}), code
-
 
 @app.route("/api/commit/init")
 def commit_init():

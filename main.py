@@ -37,6 +37,47 @@ def main():
         onboard()
         cfg = load()
 
+    # --schedule HH:MM — (re)create the daily Windows scheduled task at the given
+    # local time, with "synchronize across time zones" enabled so the trigger
+    # always fires at the same wall-clock time regardless of TZ changes.
+    if "--schedule" in args:
+        from rich.console import Console
+        c = Console()
+        idx = args.index("--schedule")
+        when = args[idx + 1] if idx + 1 < len(args) else "18:00"
+        try:
+            hh, mm = [int(x) for x in when.split(":")]
+            assert 0 <= hh < 24 and 0 <= mm < 60
+        except Exception:
+            c.print(f"[red]  Invalid time '{when}'. Use HH:MM (e.g. 18:00 for 6 PM).[/red]")
+            return
+        if sys.platform != "win32":
+            c.print("[yellow]  --schedule only supported on Windows.[/yellow]")
+            return
+        import subprocess
+        here = os.path.dirname(os.path.abspath(__file__))
+        venv_py = os.path.join(here, ".venv", "Scripts", "python.exe")
+        py = venv_py if os.path.exists(venv_py) else sys.executable
+        ps = f"""
+$task = 'GitMind_Daily'
+$action = New-ScheduledTaskAction -Execute '{py}' -Argument '"{os.path.join(here,'main.py')}" --notify' -WorkingDirectory '{here}'
+$trigger = New-ScheduledTaskTrigger -Daily -At ([datetime]::ParseExact('{hh:02d}:{mm:02d}','HH:mm',$null))
+$trigger.StartBoundary = ([datetime]::Today.AddHours({hh}).AddMinutes({mm})).ToString('s')
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -WakeToRun
+Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
+Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Settings $settings -RunLevel Limited -Force | Out-Null
+$next = (Get-ScheduledTaskInfo -TaskName $task).NextRunTime
+Write-Host ('Scheduled. Next run: ' + $next)
+"""
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True)
+        if r.returncode == 0:
+            c.print(f"[green]  ✅ Scheduled daily at {hh:02d}:{mm:02d} local time.[/green]")
+            c.print(f"[dim]  {r.stdout.strip()}[/dim]")
+        else:
+            c.print(f"[red]  Failed: {r.stderr.strip() or r.stdout.strip()}[/red]")
+            c.print("[dim]  Try running PowerShell as your user (not admin) and retry.[/dim]")
+        return
+
     # --notify: ONLY send notification + open browser (for Task Scheduler)
     if "--notify" in args:
         from agent.notify import boot_notification
