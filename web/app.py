@@ -7,6 +7,7 @@ from flask import Flask, render_template_string, jsonify, request
 from agent import database as db, github_client as gh, ai
 from agent import git_manager as gm
 from agent import commit_flow as cf
+from agent import insights
 from agent.config import load, save
 from datetime import date, timedelta
 
@@ -172,6 +173,20 @@ HTML = '''<!DOCTYPE html>
   .badge-ok    { background: rgba(34,197,94,.12);  color: var(--success); border: 1px solid rgba(34,197,94,.3); }
   .badge-warn  { background: rgba(245,158,11,.12); color: var(--warn); border: 1px solid rgba(245,158,11,.3); }
   .badge-late  { background: rgba(239,68,68,.12);  color: var(--danger); border: 1px solid rgba(239,68,68,.3); }
+
+  /* Goal progress signals */
+  .goal-row { align-items: flex-start; }
+  .goal-reason { font-size: 11.5px; color: var(--text-3); margin-top: 4px; }
+  .goal-bar-wrap { background: var(--surface-3); border-radius: 999px; height: 4px; margin-top: 8px; overflow: hidden; max-width: 320px; }
+  .goal-bar { height: 100%; border-radius: 999px; transition: width .5s ease; }
+  .sig-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+  .goal-bar.sig-ok,   .sig-badge.sig-ok   { }
+  .goal-bar.sig-ok    { background: var(--success); }
+  .goal-bar.sig-warn  { background: var(--warn); }
+  .goal-bar.sig-late  { background: var(--danger); }
+  .sig-badge.sig-ok   { background: rgba(34,197,94,.12);  color: var(--success); border: 1px solid rgba(34,197,94,.3); }
+  .sig-badge.sig-warn { background: rgba(245,158,11,.12); color: var(--warn);    border: 1px solid rgba(245,158,11,.3); }
+  .sig-badge.sig-late { background: rgba(239,68,68,.12);  color: var(--danger);  border: 1px solid rgba(239,68,68,.3); }
 
   /* ── Sprint ──────────────────────────────────────────────── */
   .sprint-box { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px 18px; }
@@ -784,6 +799,12 @@ async function loadDashboard() {
   renderGoals(d.goals);
 }
 
+const SIGNAL_META = {
+  on_track: { cls: 'sig-ok',   label: 'On track' },
+  drifting: { cls: 'sig-warn', label: 'Drifting' },
+  overdue:  { cls: 'sig-late', label: 'Overdue'  },
+};
+
 function renderGoals(goals) {
   const gl = document.getElementById('goals-list');
   if (!goals || !goals.length) {
@@ -791,16 +812,20 @@ function renderGoals(goals) {
     return;
   }
   gl.innerHTML = goals.map(g => {
-    const ms   = new Date(g.deadline + 'T00:00:00') - new Date();
-    const days = Math.ceil(ms / 86400000);
-    const cls  = days < 0 ? 'badge-late' : days <= 3 ? 'badge-late' : days <= 7 ? 'badge-warn' : 'badge-ok';
-    const lbl  = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : `${days}d left`;
-    return `<div class="goal-item">
-      <div>
+    const days = (typeof g.days_left === 'number')
+      ? g.days_left
+      : Math.ceil((new Date(g.deadline + 'T00:00:00') - new Date()) / 86400000);
+    const dueLbl = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'due today' : `${days}d left`;
+    const sig = SIGNAL_META[g.signal] || SIGNAL_META.on_track;
+    const progress = typeof g.progress === 'number' ? g.progress : 0;
+    return `<div class="goal-item goal-row">
+      <div style="flex:1;min-width:0">
         <div class="goal-desc">${escHtml(g.description)}</div>
-        <div class="goal-repo"><b>${escHtml(g.repo)}</b> · due ${g.deadline}</div>
+        <div class="goal-repo"><b>${escHtml(g.repo)}</b> · due ${g.deadline} · ${dueLbl}</div>
+        ${g.reason ? `<div class="goal-reason">${escHtml(g.reason)}</div>` : ''}
+        <div class="goal-bar-wrap"><div class="goal-bar ${sig.cls}" style="width:${Math.max(4,progress)}%"></div></div>
       </div>
-      <span class="badge ${cls}">${lbl}</span>
+      <span class="sig-badge ${sig.cls}">${sig.label}</span>
     </div>`;
   }).join('');
 }
@@ -875,7 +900,7 @@ async function closeSprint() {
   const d = await r.json();
   if (d.ok) {
     toast('Sprint closed');
-    alert('Sprint Retrospective\n\n' + (d.retro || ''));
+    alert('Sprint Retrospective\\n\\n' + (d.retro || ''));
     loadDashboard();
   } else {
     goalEl.textContent = oldText;
@@ -1386,7 +1411,7 @@ def dashboard():
 
     stats_db = db.get_stats()
     sprint   = db.get_active_sprint()
-    goals    = db.get_active_goals()
+    goals    = insights.goals_with_progress(db.get_active_goals(), all_commits)
     calendar = db.get_calendar(35)
     for d in calendar:
         d["count"] = counts_by_day.get(d["date"], 0)
@@ -1516,6 +1541,16 @@ def goal_add():
         return jsonify({"ok": True, "id": gid})
     except Exception as e:
         return _err(e)
+
+
+@app.route("/api/goals/progress")
+def goals_progress():
+    """Active goals enriched with on-track / drifting signals."""
+    try:
+        commits = gh.fetch_all_recent(35, use_cache=True)
+    except Exception:
+        commits = []
+    return jsonify({"goals": insights.goals_with_progress(db.get_active_goals(), commits)})
 
 
 @app.route("/api/goal/complete", methods=["POST"])

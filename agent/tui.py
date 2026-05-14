@@ -72,18 +72,33 @@ def _stats_row(commits: list[dict], file_stats: dict) -> None:
             border_style="yellow"
         ))
 
-def _show_goals():
+_SIGNAL_STYLE = {
+    "on_track": ("green",  "On track"),
+    "drifting": ("yellow", "Drifting"),
+    "overdue":  ("red",    "Overdue"),
+}
+
+def _show_goals(commits: list[dict] | None = None):
     goals = db.get_active_goals()
     if not goals:
         return
+    from agent import insights
+    enriched = insights.goals_with_progress(goals, commits or [])
+
     table = Table(show_header=True, header_style="bold", border_style="dim")
     table.add_column("Repo", style="cyan")
     table.add_column("Goal")
+    table.add_column("Status")
     table.add_column("Deadline", style="yellow")
-    for g in goals:
-        days_left = (date.fromisoformat(g["deadline"]) - date.today()).days
-        color = "red" if days_left <= 3 else "yellow" if days_left <= 7 else "green"
-        table.add_row(g["repo"], g["description"], f"[{color}]{g['deadline']} ({days_left}d)[/{color}]")
+    for g in enriched:
+        days_left = g["days_left"]
+        color, label = _SIGNAL_STYLE.get(g["signal"], ("green", "On track"))
+        status = f"[{color}]● {label}[/{color}]\n[dim]{g['reason']}[/dim]"
+        dl_color = "red" if days_left <= 3 else "yellow" if days_left <= 7 else "green"
+        table.add_row(
+            g["repo"], g["description"], status,
+            f"[{dl_color}]{g['deadline']} ({days_left}d)[/{dl_color}]"
+        )
     console.print(Panel(table, title="[bold]🎯 Active Goals[/bold]", border_style="dim"))
 
 # ── COMMIT CHECK-IN ────────────────────────────────────────────
@@ -173,7 +188,7 @@ def run_startup():
 
     # Stats row
     _stats_row(commits, file_stats)
-    _show_goals()
+    _show_goals(commits)
 
     # AI summary
     if commits:
@@ -310,7 +325,8 @@ def run_menu():
                 console.print("[green]  ✅ Goal added![/green]")
 
         elif choice == "6":
-            _show_goals()
+            c, _ = _ctx()
+            _show_goals(c)
 
         elif choice == "7":
             c, fs = _ctx()
