@@ -147,21 +147,6 @@ Without PATH installation, prefix with `python main.py` or `.\gitmind.bat`.
 
 ---
 
-## Why GitMind vs. the alternatives
-
-| Tool | AI commit msg | Secret detection | **Secret auto-fix** | Streak/sprints | Free |
-|---|---|---|---|---|---|
-| GitHub Copilot | ✅ | ❌ | ❌ | ❌ | ❌ (paid) |
-| GitLens | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Conventional Commits ext. | ❌ (template) | ❌ | ❌ | ❌ | ✅ |
-| git-secrets / detect-secrets | ❌ | ✅ | ❌ (only blocks) | ❌ | ✅ |
-| WakaTime | ❌ | ❌ | ❌ | ⚠️ (timer) | ⚠️ (limited) |
-| **GitMind** | ✅ | ✅ | ✅ | ✅ | ✅ |
-
-The **secret auto-fix** is the move competitors don't make. Most tools see `API_KEY = "sk-…"` in your diff and refuse to let you commit. GitMind sees it, moves the value out, rewrites your code, and lets you ship.
-
----
-
 ## Project layout
 
 ```
