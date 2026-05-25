@@ -1,45 +1,81 @@
-# GitMind for VS Code
+# GitMind — AI Commits & Secret Guard
 
-Thin VS Code client for the GitMind Python project. Hits the local Flask API at `http://localhost:7123`.
+**AI-generated commit messages, automatic secret detection in your staged files, and one-click push — all from the VS Code status bar.**
 
-## What it adds inside the editor
+A free, local alternative to GitHub Copilot for commit messages, with a secret scanner built in that doesn't just *block* leaked API keys, it **moves them to `.env` and rewrites your source for you**.
 
-- **Status bar** showing your streak (`🔥 5 ✓`) — turns yellow with the uncommitted file count the moment you change a file (`🔥 5 · 8 to commit`).
-- **`GitMind: Commit Now`** — one command that runs the full ship flow:
-  1. `git add -A`
-  2. scan staged files for secrets
-  3. on hit → prompt to auto-move them to `.env` + rewrite source to `os.getenv(...)`
-  4. ask "what did you change?" → AI writes the commit message
-  5. commit + push (creates the GitHub repo if it doesn't exist yet)
-- **`GitMind: Ask a Question`** — opens a markdown buffer with the AI answer.
-- **`GitMind: Open Dashboard`** — launches the browser dashboard.
-- **`GitMind: Start Background Server`** — spawns `python main.py --web` if `localhost:7123` is down.
+---
 
-All four are also reachable by clicking the status-bar item.
+## What it does
+
+| | |
+|---|---|
+| 🤖 **AI commit messages** | Type one line about what you changed. GitMind writes the full Conventional Commits message via Groq (free, fast, no card). |
+| 🛡️ **Secret detection + auto-fix** | Staged files are scanned for API keys, tokens, passwords, OpenAI/Groq/GitHub keys, Google API keys. On hit, GitMind moves the value to `.env`, replaces the source line with `os.getenv(...)` / `process.env.X`, and adds `.env` to `.gitignore`. |
+| 🚀 **One-click commit + push** | Stage → scan → fix → message → commit → push, all from one command. If there's no GitHub remote, GitMind asks for a name and **creates the repo for you**. |
+| 🔥 **Streak in the status bar** | See your commit streak from any window. Status bar turns yellow with a file count the moment you change a file. |
+| 💬 **Ask about your work** | "What did I build last week?" — GitMind reads your recent commits and answers. |
+
+---
+
+## Why GitMind vs. the alternatives
+
+| Tool | AI commit msg | Secret detection | **Secret auto-fix** | One-click push |
+|---|---|---|---|---|
+| GitHub Copilot | ✅ | ❌ | ❌ | ❌ |
+| GitLens | ❌ | ❌ | ❌ | ❌ |
+| Conventional Commits ext. | ❌ (template) | ❌ | ❌ | ❌ |
+| git-secrets / detect-secrets | ❌ | ✅ | ❌ (only blocks) | ❌ |
+| **GitMind** | ✅ | ✅ | ✅ | ✅ |
+
+The **secret auto-fix** is the move competitors don't make. Most tools see `API_KEY = "sk-…"` in your diff and refuse to let you commit. GitMind sees it, moves the value out, rewrites your code, and lets you ship.
+
+---
 
 ## Setup
 
-```
-cd vscode-extension
-npm install
-npm run compile
-```
+1. Install this extension.
+2. Open any folder in VS Code → a banner appears asking for the GitMind project folder. Pick it once.
+3. Status bar lights up. Done.
 
-Then in VS Code: open this folder, press `F5` to launch the Extension Development Host.
+You'll also need:
+- A free **[Groq API key](https://console.groq.com)** in your project's `.env`
+- Optionally a **GitHub Personal Access Token** with `repo` scope for the auto-create-repo feature
 
-Required setting once you've installed it for real use:
+GitMind reuses the `.env` and SQLite database from the [GitMind Python project](https://github.com/ZalakRajvanshi/Git-mind), so the optional 6 PM daily digest and browser dashboard share the same streak, sprints, and goals as the editor.
 
-```jsonc
-// settings.json
-"gitmind.projectRoot": "C:\\Users\\you\\path\\to\\gitmind_v2\\gitmind_v2"
-```
+---
 
-Other settings:
-- `gitmind.serverUrl` (default `http://localhost:7123`)
-- `gitmind.pythonPath` (default `python`)
+## Commands
 
-## How it pairs with the rest of GitMind
+All available from the command palette (`Ctrl+Shift+P`) or by clicking the status-bar item:
 
-- The 6 PM Windows Task Scheduler tick is **untouched** — keep it for the daily digest + dashboard pop.
-- The browser dashboard is **untouched** — it's still the rich morning surface.
-- This extension is the always-on "near-zero-click" lane: change a file, status bar nudges you, one command ships it.
+- **GitMind: Commit Now** — full ship flow
+- **GitMind: Ask a Question** — answers in a markdown buffer
+- **GitMind: Open Dashboard** — opens the browser dashboard (needs the Python server)
+- **GitMind: Show Menu** — quick-pick of the above
+
+---
+
+## Status bar
+
+| State | Meaning |
+|---|---|
+| `⚙ GitMind: set up` | First-run — click to pick your project folder |
+| `🔥 5 ✓` | 5-day streak, working copy clean |
+| `🔥 5 · 3 to commit` (yellow) | 3 uncommitted changes — click to commit |
+| `⚡ ✓` | Up and running, no streak yet |
+
+---
+
+## Keywords
+
+AI commit message generator, AI commits, Conventional Commits, smart commit, git AI, git assistant, secret scanner, secret detection, credential leak prevention, gitleaks alternative, detect secrets, .env helper, dotenv, one-click commit, GitHub Copilot alternative, Groq, Llama, productivity, streak tracker.
+
+---
+
+## License
+
+MIT. Free to use, modify, and ship.
+
+Author: **Zalak Rajvanshi** — [github.com/ZalakRajvanshi](https://github.com/ZalakRajvanshi)

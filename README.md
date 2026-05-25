@@ -1,6 +1,15 @@
-# ⚡ GitMind — Your GitHub Work Assistant
+# ⚡ GitMind — AI Commits, Secret Guard & a Personal GitHub Coach
 
-A personal AI agent that lives on your machine, understands your code, and helps you stay productive every day — beginner-friendly, no complicated setup.
+> **AI-generated commit messages, automatic secret detection in your code, and a streak/sprint coach — all powered by a free local agent. Works from the terminal, a browser dashboard, *and* a VS Code extension.**
+
+A personal AI assistant that lives on your machine, reads your git activity, writes your commit messages in Conventional Commits format, catches leaked API keys before they hit GitHub, and tracks your shipping streak day-by-day. No subscription. No cloud lock-in. The AI runs on **Groq (free)**.
+
+**Two ways to use it:**
+
+- 🖥️ **Python CLI + browser dashboard** — the original. Daily 6 PM digest, terminal UI, dashboard at `localhost:7123`.
+- 🧩 **VS Code extension** ([`vscode-extension/`](vscode-extension/)) — same AI, same secret scanner, same streak, accessible from the editor status bar. Install once, works in every window.
+
+Both surfaces share the **same SQLite database** and `.env`, so a commit logged from VS Code shows up in tomorrow's morning digest, and the 6 PM tick's check-in updates the editor's streak counter instantly.
 
 ---
 
@@ -14,7 +23,7 @@ bash setup.sh
 #    GitMind will ask for it on first run
 ```
 
-That's it. GitMind guides you through everything else.
+That's it. GitMind guides you through everything else. For the **VS Code extension**, see [`vscode-extension/README.md`](vscode-extension/README.md).
 
 ---
 
