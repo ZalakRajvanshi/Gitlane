@@ -1,0 +1,205 @@
+import * as vscode from "vscode";
+import * as path from "path";
+import * as fs from "fs";
+import { ensureProjectRoot, readEnv, loadSettingsJson, dbPath } from "./env";
+import { GitMindDb } from "./db";
+import { generateCommitMessage, modelFromSettings } from "./groq";
+import { createRepo } from "./github";
+import { scanFile, autofixFile, ensureGitignore, appendToGitignore, BLOCKED_FILENAMES, Finding } from "./scanner";
+import * as git from "./gitOps";
+
+async function pickRepoPath(): Promise<string | undefined> {
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) {
+    vscode.window.showErrorMessage("Open a folder in VS Code to use GitMind.");
+    return;
+  }
+  if (folders.length === 1) return folders[0].uri.fsPath;
+  const pick = await vscode.window.showQuickPick(
+    folders.map(f => ({ label: f.name, description: f.uri.fsPath, path: f.uri.fsPath })),
+    { placeHolder: "Which workspace folder?" },
+  );
+  return pick?.path;
+}
+
+export async function runCommitFlow(): Promise<void> {
+  const projectRoot = await ensureProjectRoot();
+  if (!projectRoot) return;
+
+  const repoPath = await pickRepoPath();
+  if (!repoPath) return;
+
+  const env = readEnv(projectRoot);
+  if (!env.GROQ_API_KEY) {
+    vscode.window.showErrorMessage(
+      "GROQ_API_KEY missing from .env in the GitMind project folder.",
+    );
+    return;
+  }
+
+  try {
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: "GitMind", cancellable: false },
+      async progress => {
+        progress.report({ message: "Checking repo…" });
+        const created = ensureGitignore(repoPath);
+        if (created) vscode.window.showInformationMessage("Created .gitignore with safe defaults.");
+
+        const unstaged = await git.unstagedFiles(repoPath);
+        if (unstaged.length === 0) {
+          vscode.window.showInformationMessage("Nothing to commit.");
+          return;
+        }
+
+        progress.report({ message: "Staging + scanning for secrets…" });
+        const stage = await git.stageAll(repoPath);
+        if (!stage.ok) {
+          vscode.window.showErrorMessage(`git add failed: ${stage.err}`);
+          return;
+        }
+
+        let staged = await git.stagedFiles(repoPath);
+        const blocked: string[] = [];
+        const findings: Record<string, Finding[]> = {};
+        for (const fname of staged) {
+          if (BLOCKED_FILENAMES.has(path.basename(fname))) {
+            blocked.push(fname);
+            continue;
+          }
+          const fs_ = scanFile(path.join(repoPath, fname));
+          if (fs_.length) findings[fname] = fs_;
+        }
+
+        if (blocked.length) {
+          appendToGitignore(repoPath, blocked.map(f => path.basename(f)));
+          for (const f of blocked) await git.unstage(repoPath, f);
+          vscode.window.showWarningMessage(
+            `Auto-unstaged + added to .gitignore: ${blocked.join(", ")}`,
+          );
+          staged = await git.stagedFiles(repoPath);
+        }
+
+        const findingFiles = Object.keys(findings);
+        if (findingFiles.length) {
+          const summary = findingFiles.map(f => `  • ${f} (${findings[f].length})`).join("\n");
+          const choice = await vscode.window.showWarningMessage(
+            `Sensitive values found in:\n${summary}\n\nMove them to .env and replace with env-var references?`,
+            { modal: true }, "Auto-fix", "Unstage these files",
+          );
+          if (choice === "Auto-fix") {
+            progress.report({ message: "Moving secrets to .env…" });
+            appendToGitignore(repoPath, [".env"]);
+            const envFile = path.join(repoPath, ".env");
+            if (!fs.existsSync(envFile)) fs.writeFileSync(envFile, "");
+            for (const f of findingFiles) {
+              autofixFile(path.join(repoPath, f), findings[f], envFile);
+            }
+            await git.stageAll(repoPath);
+            await git.unstage(repoPath, ".env");
+            staged = await git.stagedFiles(repoPath);
+          } else if (choice === "Unstage these files") {
+            for (const f of findingFiles) await git.unstage(repoPath, f);
+            staged = await git.stagedFiles(repoPath);
+          } else {
+            return;
+          }
+        }
+
+        if (staged.length === 0) {
+          vscode.window.showInformationMessage("Nothing left to commit.");
+          return;
+        }
+
+        const description = await vscode.window.showInputBox({
+          prompt: "What did you change? (one line — GitMind writes the full message)",
+          placeHolder: "e.g. add password reset flow",
+        });
+        if (description === undefined) return;
+
+        progress.report({ message: "Generating commit message…" });
+        const diff = await git.stagedDiff(repoPath);
+        const settings = loadSettingsJson(projectRoot);
+        const username = (settings.github_username as string) || "";
+        const model = modelFromSettings(projectRoot);
+        const message = await generateCommitMessage(
+          { apiKey: env.GROQ_API_KEY!, model },
+          staged,
+          diff || description,
+        );
+
+        const action = await vscode.window.showInformationMessage(
+          `Commit message:\n\n${message}`,
+          { modal: true }, "Commit + Push", "Commit only", "Edit message",
+        );
+        if (!action) return;
+
+        let finalMsg = message;
+        if (action === "Edit message") {
+          const edited = await vscode.window.showInputBox({ value: message, prompt: "Edit commit message" });
+          if (!edited) return;
+          finalMsg = edited;
+        }
+
+        progress.report({ message: "Committing…" });
+        const c = await git.commit(repoPath, finalMsg);
+        if (!c.ok) {
+          vscode.window.showErrorMessage(`Commit failed: ${c.out}`);
+          return;
+        }
+
+        // Mirror the Python flow: write today's log to the shared DB so the
+        // 6 PM digest + dashboard see the activity.
+        try {
+          const db = new GitMindDb(dbPath(projectRoot));
+          await db.upsertDay("committed", finalMsg, [path.basename(repoPath)]);
+        } catch {
+          // non-fatal
+        }
+
+        if (action === "Commit only") {
+          vscode.window.showInformationMessage("✅ Committed (local).");
+          return;
+        }
+
+        progress.report({ message: "Pushing…" });
+        if (!(await git.hasRemote(repoPath))) {
+          if (!env.GITHUB_TOKEN) {
+            vscode.window.showErrorMessage("No GitHub remote and no GITHUB_TOKEN to create one. Committed locally.");
+            return;
+          }
+          const name = await vscode.window.showInputBox({
+            prompt: "No GitHub remote. Repo name?",
+            value: path.basename(repoPath).toLowerCase().replace(/[ _]/g, "-"),
+          });
+          if (!name) return;
+          const visibility = await vscode.window.showQuickPick(["private", "public"], { placeHolder: "Visibility" });
+          if (!visibility) return;
+          const r = await createRepo(env.GITHUB_TOKEN, name, visibility === "private");
+          if (!r.ok) {
+            vscode.window.showErrorMessage(`GitHub: ${r.error}`);
+            return;
+          }
+          const sp = await git.setOriginAndPush(repoPath, r.clone_url);
+          if (!sp.ok) {
+            vscode.window.showErrorMessage(`Repo created but push failed: ${sp.out}`);
+            return;
+          }
+          vscode.window.showInformationMessage(
+            `🚀 Pushed: https://github.com/${username}/${name}`,
+          );
+          return;
+        }
+
+        const p = await git.push(repoPath);
+        if (!p.ok) {
+          vscode.window.showErrorMessage(`Push failed: ${p.out}`);
+          return;
+        }
+        const url = await git.remoteUrl(repoPath);
+        vscode.window.showInformationMessage(`🚀 Pushed${url ? `: ${url}` : ""}.`);
+      },
+    );
+  } catch (e: any) {
+    vscode.window.showErrorMessage(`GitMind: ${e.message || e}`);
+  }
+}

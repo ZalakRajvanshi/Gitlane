@@ -1,0 +1,47 @@
+{
+  "name": "gitmind-vscode",
+  "displayName": "GitMind",
+  "description": "One-click commit with AI message, secret scan and auto-fix, push, and streak tracking. Reads/writes the same SQLite file as the GitMind CLI and dashboard.",
+  "version": "0.1.0",
+  "publisher": "zalakrajvanshi",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["SCM Providers", "Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "gitmind.commitNow",     "title": "GitMind: Commit Now" },
+      { "command": "gitmind.ask",           "title": "GitMind: Ask a Question" },
+      { "command": "gitmind.openDashboard", "title": "GitMind: Open Dashboard (Browser)" },
+      { "command": "gitmind.showMenu",      "title": "GitMind: Show Menu" }
+    ],
+    "configuration": {
+      "title": "GitMind",
+      "properties": {
+        "gitmind.projectRoot": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the GitMind project folder (the one containing data/gitmind.db and .env). Asked on first run."
+        },
+        "gitmind.dashboardUrl": {
+          "type": "string",
+          "default": "http://localhost:7123",
+          "description": "Where the optional Python browser dashboard runs (only used by the 'Open Dashboard' command)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch":   "tsc -p . -w"
+  },
+  "dependencies": {
+    "sql.js": "^1.10.3"
+  },
+  "devDependencies": {
+    "@types/node":   "^20.11.0",
+    "@types/sql.js": "^1.4.9",
+    "@types/vscode": "^1.85.0",
+    "typescript":    "^5.4.0"
+  }
+}

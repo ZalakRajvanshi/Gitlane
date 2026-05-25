@@ -1,0 +1,99 @@
+import * as vscode from "vscode";
+import { StatusBar } from "./statusBar";
+import { runCommitFlow } from "./commitFlow";
+import { ensureProjectRoot, readEnv, loadSettingsJson, dbPath } from "./env";
+import { GitMindDb } from "./db";
+import { answerQuestion, modelFromSettings } from "./groq";
+import { fetchAllRecent } from "./github";
+
+let statusBar: StatusBar | undefined;
+
+export function activate(context: vscode.ExtensionContext): void {
+  statusBar = new StatusBar();
+  context.subscriptions.push({ dispose: () => statusBar?.dispose() });
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("gitmind.commitNow",     runCommitFlow),
+    vscode.commands.registerCommand("gitmind.ask",           askQuestion),
+    vscode.commands.registerCommand("gitmind.openDashboard", openDashboard),
+    vscode.commands.registerCommand("gitmind.showMenu",      showMenu),
+  );
+
+  // Off the activation hot path: project-root prompt (first run only) + initial refresh.
+  statusBar.attach().catch(err => console.error("[gitmind] status bar attach failed:", err));
+  void ensureProjectRoot();
+}
+
+export function deactivate(): void {
+  statusBar?.dispose();
+}
+
+function openDashboard(): void {
+  const url = vscode.workspace.getConfiguration("gitmind").get<string>("dashboardUrl", "http://localhost:7123");
+  vscode.env.openExternal(vscode.Uri.parse(url));
+}
+
+async function askQuestion(): Promise<void> {
+  const root = await ensureProjectRoot();
+  if (!root) return;
+
+  const env = readEnv(root);
+  if (!env.GROQ_API_KEY) {
+    vscode.window.showErrorMessage("GROQ_API_KEY missing from the project's .env file.");
+    return;
+  }
+
+  const settings = loadSettingsJson(root);
+  const username = (settings.github_username as string) || "";
+  if (!username) {
+    vscode.window.showErrorMessage("github_username missing from settings.json in the project folder.");
+    return;
+  }
+
+  const question = await vscode.window.showInputBox({ prompt: "Ask GitMind anything about your work" });
+  if (!question) return;
+
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: "GitMind", cancellable: false },
+    async progress => {
+      progress.report({ message: "Fetching commits + thinking…" });
+      try {
+        const commits = await fetchAllRecent(env.GITHUB_TOKEN, username, 7);
+        const db = new GitMindDb(dbPath(root));
+        const memory = await db.getMemory();
+        const answer = await answerQuestion(
+          { apiKey: env.GROQ_API_KEY!, model: modelFromSettings(root) },
+          username,
+          memory,
+          question,
+          commits,
+        );
+        const doc = await vscode.workspace.openTextDocument({
+          content: `Q: ${question}\n\n${answer}`, language: "markdown",
+        });
+        await vscode.window.showTextDocument(doc, { preview: true });
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`GitMind: ${e.message || e}`);
+      }
+    },
+  );
+}
+
+async function showMenu(): Promise<void> {
+  const items: vscode.QuickPickItem[] = [
+    { label: "$(git-commit) Commit now",  description: "Stage, scan secrets, generate message, push" },
+    { label: "$(question) Ask GitMind",   description: "What did I work on this week?" },
+    { label: "$(browser) Open dashboard", description: "Browser dashboard (requires Python server running)" },
+    { label: "$(gear) Pick project folder", description: "Change the GitMind project location" },
+  ];
+  const pick = await vscode.window.showQuickPick(items, { placeHolder: "GitMind" });
+  if (!pick) return;
+  if (pick.label.includes("Commit now"))            return runCommitFlow();
+  if (pick.label.includes("Ask GitMind"))           return askQuestion();
+  if (pick.label.includes("Open dashboard"))        return openDashboard();
+  if (pick.label.includes("Pick project folder")) {
+    await vscode.workspace.getConfiguration().update("gitmind.projectRoot", "", vscode.ConfigurationTarget.Global);
+    await ensureProjectRoot();
+    await statusBar?.refresh();
+  }
+}
