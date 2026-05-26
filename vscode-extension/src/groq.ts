@@ -43,7 +43,7 @@ function commitsStr(commits: Array<{ repo: string; message: string; date: string
 function baseSystem(username: string, memory: Record<string, string>): string {
   const mem = Object.entries(memory).map(([k, v]) => `  ${k}: ${v}`).join("\n");
   const memBlock = mem ? `\nKnown context about this developer:\n${mem}` : "";
-  return `You are GitMind, a personal GitHub work assistant for @${username}.
+  return `You are Gitlane, a personal GitHub work assistant for @${username}.
 You help developers track their work, stay focused, and grow.
 Be friendly, concise, and specific. Use plain text. Avoid jargon.
 Never say "I don't have access" — work with what you know.${memBlock}`;

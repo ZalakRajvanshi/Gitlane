@@ -4,6 +4,9 @@
 
 import sys
 import os
+import threading
+import time
+import webbrowser
 
 # Load .env FIRST before any other imports — pythonw.exe has no working directory
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -45,21 +48,21 @@ def main():
     streak = stats["streak"]
 
     if today and today["status"] == "committed":
-        title = "GitMind - Already committed today!"
+        title = "Gitlane - Already committed today!"
         message = f"Streak: {streak} days - Dashboard opening..."
     elif today and today["status"] == "skipped":
-        title = "GitMind - Skipped today"
+        title = "Gitlane - Skipped today"
         message = "Dashboard opening..."
     else:
         sprint = db.get_active_sprint()
         if sprint:
-            title = "GitMind - Sprint Active"
+            title = "Gitlane - Sprint Active"
             message = f"{sprint['goal'][:50]} - Check in now!"
         elif streak >= 3:
-            title = f"GitMind - {streak} day streak!"
+            title = f"Gitlane - {streak} day streak!"
             message = "Don't break it - dashboard opening..."
         else:
-            title = "GitMind - Daily Check-in"
+            title = "Gitlane - Daily Check-in"
             message = "Your digest is ready - opening dashboard..."
 
     # Start Flask in background thread

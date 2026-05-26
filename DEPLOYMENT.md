@@ -6,7 +6,7 @@ Run this checklist:
 
 ```bash
 # 1. Make sure you're in the right directory
-cd gitmind_v2
+cd gitlane
 
 # 2. Check what will be committed
 git status
@@ -32,11 +32,11 @@ If you haven't already:
 git init
 
 # Add GitHub remote
-git remote add origin https://github.com/yourusername/gitmind.git
+git remote add origin https://github.com/ZalakRajvanshi/gitlane.git
 
 # Create initial commit
 git add .
-git commit -m "Initial commit: GitMind AI assistant"
+git commit -m "Initial commit: Gitlane AI assistant"
 
 # Push to GitHub
 git branch -M main
@@ -58,8 +58,8 @@ After pushing, verify:
 Create a CONTRIBUTING.md workflow:
 ```bash
 # Fork on GitHub, then:
-git clone https://github.com/yourfork/gitmind.git
-cd gitmind
+git clone https://github.com/yourfork/gitlane.git
+cd gitlane
 git checkout -b feature/your-feature-name
 # Make changes
 git add .

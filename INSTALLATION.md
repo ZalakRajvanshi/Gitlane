@@ -13,8 +13,8 @@
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/gitmind.git
-cd gitmind
+git clone https://github.com/ZalakRajvanshi/gitlane.git
+cd gitlane
 
 # Run setup (requires Admin)
 .\setup.ps1
@@ -35,8 +35,8 @@ notepad .env
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/gitmind.git
-cd gitmind
+git clone https://github.com/ZalakRajvanshi/gitlane.git
+cd gitlane
 
 # Run setup
 bash setup.sh
@@ -77,7 +77,7 @@ python main.py
 python main.py
 ```
 
-GitMind will guide you through initial configuration.
+Gitlane will guide you through initial configuration.
 
 ## Troubleshooting
 

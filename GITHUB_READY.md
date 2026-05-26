@@ -35,8 +35,8 @@ git status
 ```bash
 git init
 git add .
-git commit -m "Initial commit: GitMind AI assistant"
-git remote add origin https://github.com/YOUR_USERNAME/gitmind.git
+git commit -m "Initial commit: Gitlane AI assistant"
+git remote add origin https://github.com/ZalakRajvanshi/gitlane.git
 git branch -M main
 git push -u origin main
 ```
@@ -52,7 +52,7 @@ git push -u origin main
 ### Step 4: Final Security Check
 ```bash
 # Clone from GitHub to a test directory to verify no secrets leaked
-git clone https://github.com/YOUR_USERNAME/gitmind.git test-clone
+git clone https://github.com/ZalakRajvanshi/gitlane.git test-clone
 cd test-clone
 grep -r "GROQ_API_KEY" . || echo "✓ No API keys found"
 grep -r "GITHUB_TOKEN" . || echo "✓ No GitHub tokens found"

@@ -1,4 +1,4 @@
-# Contributing to GitMind
+# Contributing to Gitlane
 
 Thanks for your interest in contributing! Here are some guidelines:
 

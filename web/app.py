@@ -1,5 +1,5 @@
 """
-Flask web dashboard — opens in browser via `gitmind --web`
+Flask web dashboard — opens in browser via `gitlane --web`
 """
 import os
 from pathlib import Path
@@ -22,7 +22,7 @@ HTML = '''<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GitMind ⚡</title>
+<title>Gitlane ⚡</title>
 <style>
   /* ── Cursor/Claude-style minimalist palette ─────────────── */
   :root {
@@ -462,7 +462,7 @@ HTML = '''<!DOCTYPE html>
 <body>
 <div class="header">
   <div class="logo">⚡</div>
-  <h1>GitMind</h1>
+  <h1>Gitlane</h1>
   <span class="user" id="username-label"></span>
   <span class="updated"><span class="dot-live"></span><span id="last-updated">Loading...</span></span>
 </div>

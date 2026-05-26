@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
-const PROJECT_ROOT_KEY = "gitmind.projectRoot";
+const PROJECT_ROOT_KEY = "gitlane.projectRoot";
 
 export function getProjectRoot(): string {
   return vscode.workspace.getConfiguration().get<string>(PROJECT_ROOT_KEY, "").trim();
@@ -22,7 +22,7 @@ export async function ensureProjectRoot(): Promise<string | undefined> {
   if (current && projectRootIsValid(current)) return current;
 
   const proceed = await vscode.window.showInformationMessage(
-    "GitMind needs to know where your project folder is (it contains data/gitmind.db and .env). Pick it once.",
+    "Gitlane needs to know where your project folder is (it contains data/gitmind.db and .env). Pick it once.",
     { modal: false },
     "Pick folder", "Later",
   );
@@ -32,14 +32,14 @@ export async function ensureProjectRoot(): Promise<string | undefined> {
     canSelectFolders: true,
     canSelectFiles: false,
     canSelectMany: false,
-    openLabel: "Use this as GitMind project folder",
+    openLabel: "Use this as Gitlane project folder",
   });
   if (!picked || picked.length === 0) return undefined;
 
   const candidate = picked[0].fsPath;
   if (!projectRootIsValid(candidate)) {
     vscode.window.showErrorMessage(
-      `Doesn't look like a GitMind project (no main.py and no data/gitmind.db inside ${candidate}).`,
+      `Doesn't look like a Gitlane project (no main.py and no data/gitmind.db inside ${candidate}).`,
     );
     return undefined;
   }

@@ -14,7 +14,7 @@ console = Console()
 def run():
     console.clear()
     console.print(Panel.fit(
-        "[bold cyan]⚡ Welcome to GitMind![/bold cyan]\n"
+        "[bold cyan]⚡ Welcome to Gitlane![/bold cyan]\n"
         "[dim]Your personal GitHub work assistant[/dim]\n\n"
         "Let's set you up in 2 minutes.\n"
         "[dim]You only need to do this once.[/dim]",
@@ -25,7 +25,7 @@ def run():
 
     # Step 1 — GitHub username
     console.print("\n[bold]Step 1 of 3[/bold] — Your GitHub username")
-    console.print("[dim]This is how GitMind finds your repositories.[/dim]\n")
+    console.print("[dim]This is how Gitlane finds your repositories.[/dim]\n")
     username = Prompt.ask("  GitHub username", default=settings.get("github_username") or "")
     while not username.strip():
         console.print("[red]  Username can't be empty.[/red]")
@@ -95,7 +95,7 @@ def run():
 
     console.print(Panel.fit(
         "[bold green]✅ All set![/bold green]\n\n"
-        "GitMind will now:\n"
+        "Gitlane will now:\n"
         "  • Show your daily digest every morning\n"
         "  • Ask what you're committing today\n"
         "  • Track your streak and goals\n"

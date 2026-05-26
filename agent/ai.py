@@ -49,7 +49,7 @@ def _base_system() -> str:
     cfg = load()
     username = cfg.get("github_username", "the developer")
     mem = _memory_context()
-    return f"""You are GitMind, a personal GitHub work assistant for @{username}.
+    return f"""You are Gitlane, a personal GitHub work assistant for @{username}.
 You help developers track their work, stay focused, and grow.
 Be friendly, concise, and specific. Use plain text. Avoid jargon.
 Never say "I don't have access" — work with what you know.

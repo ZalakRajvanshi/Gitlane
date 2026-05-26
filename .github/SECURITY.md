@@ -8,7 +8,7 @@ Instead, please email your findings to the maintainer or use GitHub's private vu
 
 ## Safe Practices
 
-When using GitMind:
+When using Gitlane:
 
 - **Never commit `.env` files** — they contain API keys
 - **Keep `settings.json` local** — contains personal preferences
@@ -23,7 +23,7 @@ When using GitMind:
 
 ## Updates
 
-Keep GitMind updated to receive security patches:
+Keep Gitlane updated to receive security patches:
 ```bash
 git pull origin main
 pip install -r requirements.txt --upgrade

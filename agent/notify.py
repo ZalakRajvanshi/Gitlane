@@ -59,21 +59,21 @@ def boot_notification():
     streak = stats["streak"]
 
     if today and today["status"] == "committed":
-        title = "GitMind ✅ Already committed today!"
+        title = "Gitlane ✅ Already committed today!"
         message = f"Streak: {streak} days 🔥 — Dashboard opening..."
     elif today and today["status"] == "skipped":
-        title = "GitMind ⏭️ Skipped today"
+        title = "Gitlane ⏭️ Skipped today"
         message = "Dashboard opening — change your mind anytime."
     else:
         sprint = db.get_active_sprint()
         if sprint:
-            title = "GitMind ⚡ Sprint Active"
+            title = "Gitlane ⚡ Sprint Active"
             message = f"{sprint['goal'][:50]} — Check in now!"
         elif streak >= 3:
-            title = f"GitMind 🔥 {streak}-day streak!"
+            title = f"Gitlane 🔥 {streak}-day streak!"
             message = "Don't break it — dashboard opening..."
         else:
-            title = "GitMind ⚡ Daily Check-in Time"
+            title = "Gitlane ⚡ Daily Check-in Time"
             message = "Your digest is ready — opening dashboard..."
 
     send_and_open(title, message)

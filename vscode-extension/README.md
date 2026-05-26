@@ -1,4 +1,4 @@
-# GitMind — AI Commits & Secret Guard
+# Gitlane — AI Commits & Secret Guard
 
 **AI-generated commit messages, automatic secret detection in your staged files, and one-click push — all from the VS Code status bar.**
 
@@ -10,15 +10,15 @@ A free, local alternative to GitHub Copilot for commit messages, with a secret s
 
 | | |
 |---|---|
-| 🤖 **AI commit messages** | Type one line about what you changed. GitMind writes the full Conventional Commits message via Groq (free, fast, no card). |
-| 🛡️ **Secret detection + auto-fix** | Staged files are scanned for API keys, tokens, passwords, OpenAI/Groq/GitHub keys, Google API keys. On hit, GitMind moves the value to `.env`, replaces the source line with `os.getenv(...)` / `process.env.X`, and adds `.env` to `.gitignore`. |
-| 🚀 **One-click commit + push** | Stage → scan → fix → message → commit → push, all from one command. If there's no GitHub remote, GitMind asks for a name and **creates the repo for you**. |
+| 🤖 **AI commit messages** | Type one line about what you changed. Gitlane writes the full Conventional Commits message via Groq (free, fast, no card). |
+| 🛡️ **Secret detection + auto-fix** | Staged files are scanned for API keys, tokens, passwords, OpenAI/Groq/GitHub keys, Google API keys. On hit, Gitlane moves the value to `.env`, replaces the source line with `os.getenv(...)` / `process.env.X`, and adds `.env` to `.gitignore`. |
+| 🚀 **One-click commit + push** | Stage → scan → fix → message → commit → push, all from one command. If there's no GitHub remote, Gitlane asks for a name and **creates the repo for you**. |
 | 🔥 **Streak in the status bar** | See your commit streak from any window. Status bar turns yellow with a file count the moment you change a file. |
-| 💬 **Ask about your work** | "What did I build last week?" — GitMind reads your recent commits and answers. |
+| 💬 **Ask about your work** | "What did I build last week?" — Gitlane reads your recent commits and answers. |
 
 ---
 
-## Why GitMind vs. the alternatives
+## Why Gitlane vs. the alternatives
 
 | Tool | AI commit msg | Secret detection | **Secret auto-fix** | One-click push |
 |---|---|---|---|---|
@@ -26,23 +26,23 @@ A free, local alternative to GitHub Copilot for commit messages, with a secret s
 | GitLens | ❌ | ❌ | ❌ | ❌ |
 | Conventional Commits ext. | ❌ (template) | ❌ | ❌ | ❌ |
 | git-secrets / detect-secrets | ❌ | ✅ | ❌ (only blocks) | ❌ |
-| **GitMind** | ✅ | ✅ | ✅ | ✅ |
+| **Gitlane** | ✅ | ✅ | ✅ | ✅ |
 
-The **secret auto-fix** is the move competitors don't make. Most tools see `API_KEY = "sk-…"` in your diff and refuse to let you commit. GitMind sees it, moves the value out, rewrites your code, and lets you ship.
+The **secret auto-fix** is the move competitors don't make. Most tools see `API_KEY = "sk-…"` in your diff and refuse to let you commit. Gitlane sees it, moves the value out, rewrites your code, and lets you ship.
 
 ---
 
 ## Setup
 
 1. Install this extension.
-2. Open any folder in VS Code → a banner appears asking for the GitMind project folder. Pick it once.
+2. Open any folder in VS Code → a banner appears asking for the Gitlane project folder. Pick it once.
 3. Status bar lights up. Done.
 
 You'll also need:
 - A free **[Groq API key](https://console.groq.com)** in your project's `.env`
 - Optionally a **GitHub Personal Access Token** with `repo` scope for the auto-create-repo feature
 
-GitMind reuses the `.env` and SQLite database from the [GitMind Python project](https://github.com/ZalakRajvanshi/Git-mind), so the optional 6 PM daily digest and browser dashboard share the same streak, sprints, and goals as the editor.
+Gitlane reuses the `.env` and SQLite database from the [Gitlane Python project](https://github.com/ZalakRajvanshi/gitlane), so the optional 6 PM daily digest and browser dashboard share the same streak, sprints, and goals as the editor.
 
 ---
 
@@ -50,10 +50,10 @@ GitMind reuses the `.env` and SQLite database from the [GitMind Python project](
 
 All available from the command palette (`Ctrl+Shift+P`) or by clicking the status-bar item:
 
-- **GitMind: Commit Now** — full ship flow
-- **GitMind: Ask a Question** — answers in a markdown buffer
-- **GitMind: Open Dashboard** — opens the browser dashboard (needs the Python server)
-- **GitMind: Show Menu** — quick-pick of the above
+- **Gitlane: Commit Now** — full ship flow
+- **Gitlane: Ask a Question** — answers in a markdown buffer
+- **Gitlane: Open Dashboard** — opens the browser dashboard (needs the Python server)
+- **Gitlane: Show Menu** — quick-pick of the above
 
 ---
 
@@ -61,7 +61,7 @@ All available from the command palette (`Ctrl+Shift+P`) or by clicking the statu
 
 | State | Meaning |
 |---|---|
-| `⚙ GitMind: set up` | First-run — click to pick your project folder |
+| `⚙ Gitlane: set up` | First-run — click to pick your project folder |
 | `🔥 5 ✓` | 5-day streak, working copy clean |
 | `🔥 5 · 3 to commit` (yellow) | 3 uncommitted changes — click to commit |
 | `⚡ ✓` | Up and running, no streak yet |

@@ -165,7 +165,7 @@ def run_startup():
     console.clear()
     now = datetime.now().strftime("%A, %B %d — %I:%M %p")
     console.print(Panel.fit(
-        f"[bold cyan]⚡ GitMind[/bold cyan]  [dim]{now}[/dim]",
+        f"[bold cyan]⚡ Gitlane[/bold cyan]  [dim]{now}[/dim]",
         border_style="cyan"
     ))
 
@@ -174,7 +174,7 @@ def run_startup():
     if today and today["status"] in ("committed", "skipped"):
         console.print(f"\n[green]  ✅ Already checked in today ({today['status'].upper()}).[/green]")
         console.print(_calendar_panel())
-        console.print(f"\n[dim]  Type 'gitmind --cli' for interactive mode or 'gitmind --web' for browser dashboard.[/dim]\n")
+        console.print(f"\n[dim]  Type 'gitlane --cli' for interactive mode or 'gitlane --web' for browser dashboard.[/dim]\n")
         return
 
     # Fetch data
@@ -214,7 +214,7 @@ def run_startup():
     commit_checkin(commits, file_stats)
 
     # Footer
-    console.print(f"\n[dim]  Commands: [cyan]gitmind[/cyan] (menu) · [cyan]gitmind --web[/cyan] (browser dashboard) · [cyan]gitmind ask \"...\"[/cyan][/dim]\n")
+    console.print(f"\n[dim]  Commands: [cyan]gitlane[/cyan] (menu) · [cyan]gitlane --web[/cyan] (browser dashboard) · [cyan]gitlane ask \"...\"[/cyan][/dim]\n")
 
 # ── INTERACTIVE MENU ───────────────────────────────────────────
 
@@ -251,7 +251,7 @@ def run_menu():
             loaded[0] = True
         return commits, file_stats
 
-    console.print(Panel.fit("[bold cyan]⚡ GitMind[/bold cyan]", border_style="cyan"))
+    console.print(Panel.fit("[bold cyan]⚡ Gitlane[/bold cyan]", border_style="cyan"))
 
     while True:
         console.print(MENU)

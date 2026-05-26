@@ -1,4 +1,4 @@
-# ⚡ GitMind — AI Commits, Secret Guard & a Personal GitHub Coach
+# ⚡ Gitlane — AI Commits, Secret Guard & a Personal GitHub Coach
 
 > **AI-generated commit messages, automatic secret detection in your code, and a streak/sprint coach — all powered by a free local agent. Works from the terminal, a browser dashboard, *and* a VS Code extension.**
 
@@ -11,7 +11,7 @@ A personal AI assistant that lives on your machine, reads your git activity, wri
 | Surface | What you use it for | Trigger |
 |---|---|---|
 | 🧩 **VS Code extension** | One-click commit + secret scan + push from the editor status bar | Manual (commands) or auto on file change |
-| 🖥️ **Browser dashboard** | Calendar, sprints, goals, ask anything visually | `gitmind --web` → `localhost:7123` |
+| 🖥️ **Browser dashboard** | Calendar, sprints, goals, ask anything visually | `gitlane --web` → `localhost:7123` |
 | ⏰ **Daily tick** | 6 PM toast + auto-open dashboard with weekly digest | Windows Task Scheduler |
 
 All three read and write the **same SQLite file** (`data/gitmind.db`) and the same `.env`, so they always see the same streak, sprints, goals, and memory. A commit logged from VS Code shows up in the next morning's digest. The 6 PM check-in updates the editor's streak instantly.
@@ -23,18 +23,18 @@ All three read and write the **same SQLite file** (`data/gitmind.db`) and the sa
 ### Option 1 — Windows (most users)
 
 ```powershell
-git clone https://github.com/ZalakRajvanshi/Git-mind.git
-cd Git-mind
+git clone https://github.com/ZalakRajvanshi/gitlane.git
+cd gitlane
 .\setup.ps1
 ```
 
-`setup.ps1` creates a virtual environment, installs everything, creates a `gitmind.bat` launcher, and optionally adds the daily 6 PM scheduled task.
+`setup.ps1` creates a virtual environment, installs everything, creates a `gitlane.bat` launcher, and optionally adds the daily 6 PM scheduled task.
 
 ### Option 2 — Mac / Linux
 
 ```bash
-git clone https://github.com/ZalakRajvanshi/Git-mind.git
-cd Git-mind
+git clone https://github.com/ZalakRajvanshi/gitlane.git
+cd gitlane
 bash setup.sh
 ```
 
@@ -48,7 +48,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-On first run, GitMind walks you through pasting a free **[Groq API key](https://console.groq.com)** and (optionally) a **[GitHub personal access token](https://github.com/settings/tokens)** with `repo` scope.
+On first run, Gitlane walks you through pasting a free **[Groq API key](https://console.groq.com)** and (optionally) a **[GitHub personal access token](https://github.com/settings/tokens)** with `repo` scope.
 
 ### Optional: install the VS Code extension
 
@@ -59,7 +59,7 @@ npm run compile
 npx --yes @vscode/vsce package --allow-missing-repository
 ```
 
-Then in VS Code → Extensions → `…` → **Install from VSIX…** → pick the generated `gitmind-vscode-*.vsix`.
+Then in VS Code → Extensions → `…` → **Install from VSIX…** → pick the generated `gitlane-*.vsix`.
 
 Full extension docs and the marketplace landing copy live in [`vscode-extension/README.md`](vscode-extension/README.md).
 
@@ -72,14 +72,14 @@ Full extension docs and the marketplace landing copy live in [`vscode-extension/
 1. **📋 Daily digest** — AI summary of your last 7 days across all repos
 2. **⚠️ Stalled repos** — flags repos you haven't touched in a while
 3. **🎯 Next tasks** — 5 specific things to work on today
-4. **📌 Commit check-in** — type what you're working on, GitMind writes the message; press Enter to skip
+4. **📌 Commit check-in** — type what you're working on, Gitlane writes the message; press Enter to skip
 5. **Interactive menu** — ask questions, manage sprints, set goals
 
 **Throughout the day (VS Code extension):**
 
 - Status bar shows your streak. The moment you change a file, it flips to yellow with the uncommitted file count.
-- `Ctrl+Shift+P` → **GitMind: Commit Now** runs the full ship flow: stage → scan for secrets → auto-fix to `.env` → AI commit message → commit → push (creates the GitHub repo if it doesn't exist).
-- `Ctrl+Shift+P` → **GitMind: Ask a Question** answers things like *"what did I build last week?"* in a markdown buffer.
+- `Ctrl+Shift+P` → **Gitlane: Commit Now** runs the full ship flow: stage → scan for secrets → auto-fix to `.env` → AI commit message → commit → push (creates the GitHub repo if it doesn't exist).
+- `Ctrl+Shift+P` → **Gitlane: Ask a Question** answers things like *"what did I build last week?"* in a markdown buffer.
 
 ---
 
@@ -88,20 +88,20 @@ Full extension docs and the marketplace landing copy live in [`vscode-extension/
 If you ran `setup.ps1` / `setup.sh` and chose to add it to PATH:
 
 ```
-gitmind                 → full morning digest + commit check-in
-gitmind --cli           → jump straight to the interactive menu
-gitmind --web           → open the browser dashboard
-gitmind --notify        → fire the 6 PM toast manually
-gitmind --schedule 18:00  → (re)create the Windows daily task at 6 PM
-gitmind commit          → smart commit from any project folder
-gitmind ask "what did I work on this week?"
+gitlane                 → full morning digest + commit check-in
+gitlane --cli           → jump straight to the interactive menu
+gitlane --web           → open the browser dashboard
+gitlane --notify        → fire the 6 PM toast manually
+gitlane --schedule 18:00  → (re)create the Windows daily task at 6 PM
+gitlane commit          → smart commit from any project folder
+gitlane ask "what did I work on this week?"
 ```
 
-Without PATH installation, prefix with `python main.py` or `.\gitmind.bat`.
+Without PATH installation, prefix with `python main.py` or `.\gitlane.bat`.
 
 ---
 
-## Menu (`gitmind --cli`)
+## Menu (`gitlane --cli`)
 
 ```
 1  Ask a question        "what did I build last week?" "why is my streak broken?"
@@ -119,7 +119,7 @@ Without PATH installation, prefix with `python main.py` or `.\gitmind.bat`.
 
 ## Browser dashboard
 
-`gitmind --web` opens a dashboard at `localhost:7123`:
+`gitlane --web` opens a dashboard at `localhost:7123`:
 
 - Stats at a glance · all recent commits · activity calendar
 - Active goals with deadlines · current sprint progress
@@ -134,7 +134,7 @@ Without PATH installation, prefix with `python main.py` or `.\gitmind.bat`.
 |---|---|
 | 🤖 **AI commit messages** | Conventional Commits format, generated from your staged diff + a one-line description |
 | 🛡️ **Secret auto-fix** | Detects API keys, tokens, passwords, OpenAI/Groq/GitHub/Google keys in staged files → moves them to `.env`, rewrites your source with `os.getenv(...)` / `process.env`, adds `.env` to `.gitignore` |
-| 🚀 **One-click ship** | Stage + scan + fix + commit + push in one command. No GitHub remote? GitMind creates the repo. |
+| 🚀 **One-click ship** | Stage + scan + fix + commit + push in one command. No GitHub remote? Gitlane creates the repo. |
 | 🔥 **Streak tracking** | Day-by-day streak counter; skipping is allowed and tracked without judgment |
 | 🏃 **Sprints** | Set a weekly goal, get an AI retrospective when it closes |
 | 🎯 **Goals** | Per-repo deadlines with on-track / drifting / overdue signals |
@@ -150,11 +150,11 @@ Without PATH installation, prefix with `python main.py` or `.\gitmind.bat`.
 ## Project layout
 
 ```
-Git-mind/
+gitlane/
 ├── main.py                     ← Python entrypoint
 ├── setup.ps1 / setup.sh        ← installers (Windows / Unix)
 ├── requirements.txt
-├── gitmind.bat                 ← Windows launcher (created by setup)
+├── gitlane.bat                 ← Windows launcher (created by setup)
 ├── settings.json               ← your config (gitignored)
 ├── .env                        ← your API keys (gitignored)
 ├── agent/
@@ -174,7 +174,7 @@ Git-mind/
 │   ├── src/                    ← reads the same gitmind.db + .env
 │   └── README.md               ← marketplace listing
 ├── data/
-│   └── gitmind.db              ← shared SQLite (gitignored)
+│   └── gitmind.db              ← shared SQLite (gitignored; filename kept for backward-compat)
 └── logs/                       ← (reserved for future digest archives)
 ```
 

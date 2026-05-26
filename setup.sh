@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# GitMind Setup — run once: bash setup.sh
+# Gitlane Setup — run once: bash setup.sh
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV="$DIR/.venv"
 
 echo ""
 echo "╔═══════════════════════════════════════╗"
-echo "║   ⚡ GitMind Setup                    ║"
+echo "║   ⚡ Gitlane Setup                    ║"
 echo "╚═══════════════════════════════════════╝"
 echo ""
 
@@ -32,7 +32,7 @@ echo "✅  Packages installed"
 mkdir -p "$DIR/data" "$DIR/logs"
 
 # Launcher
-LAUNCHER="$DIR/gitmind.sh"
+LAUNCHER="$DIR/gitlane.sh"
 cat > "$LAUNCHER" << LAUNCHER_EOF
 #!/usr/bin/env bash
 source "$VENV/bin/activate"
@@ -42,11 +42,11 @@ LAUNCHER_EOF
 chmod +x "$LAUNCHER"
 
 # Global command (optional)
-GLOBAL_BIN="/usr/local/bin/gitmind"
+GLOBAL_BIN="/usr/local/bin/gitlane"
 if [ -w "/usr/local/bin" ]; then
-    ln -sf "$LAUNCHER" "$GLOBAL_BIN" 2>/dev/null && echo "✅  'gitmind' command installed globally"
+    ln -sf "$LAUNCHER" "$GLOBAL_BIN" 2>/dev/null && echo "✅  'gitlane' command installed globally"
 else
-    echo "ℹ️   Run with: ./gitmind.sh  (or add to PATH manually)"
+    echo "ℹ️   Run with: ./gitlane.sh  (or add to PATH manually)"
 fi
 
 # ── STARTUP ─────────────────────────────────────────────────
@@ -62,24 +62,24 @@ read -p "    Choice [1-4]: " SC
 case $SC in
   1)
     RCFILE="$HOME/.zshrc"
-    if ! grep -q "gitmind" "$RCFILE" 2>/dev/null; then
-        printf '\n# GitMind — auto-start\nalias gitmind="%s"\n%s\n' "$LAUNCHER" "$LAUNCHER" >> "$RCFILE"
+    if ! grep -q "gitlane" "$RCFILE" 2>/dev/null; then
+        printf '\n# Gitlane — auto-start\nalias gitlane="%s"\n%s\n' "$LAUNCHER" "$LAUNCHER" >> "$RCFILE"
         echo "✅  Added to ~/.zshrc"
     else echo "ℹ️   Already in ~/.zshrc"; fi ;;
   2)
     RCFILE="$HOME/.bashrc"
-    if ! grep -q "gitmind" "$RCFILE" 2>/dev/null; then
-        printf '\n# GitMind — auto-start\nalias gitmind="%s"\n%s\n' "$LAUNCHER" "$LAUNCHER" >> "$RCFILE"
+    if ! grep -q "gitlane" "$RCFILE" 2>/dev/null; then
+        printf '\n# Gitlane — auto-start\nalias gitlane="%s"\n%s\n' "$LAUNCHER" "$LAUNCHER" >> "$RCFILE"
         echo "✅  Added to ~/.bashrc"
     else echo "ℹ️   Already in ~/.bashrc"; fi ;;
   3)
     # macOS: notification only on boot, full UI when terminal opens
-    PLIST="$HOME/Library/LaunchAgents/com.gitmind.plist"
+    PLIST="$HOME/Library/LaunchAgents/com.gitlane.plist"
     cat > "$PLIST" << PLIST_EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>Label</key><string>com.gitmind</string>
+  <key>Label</key><string>com.gitlane</string>
   <key>ProgramArguments</key><array>
     <string>$LAUNCHER</string><string>--notify</string>
   </array>
@@ -92,19 +92,19 @@ PLIST_EOF
     # Also add to .zshrc for full UI on terminal open
     RCFILE="$HOME/.zshrc"
     [ ! -f "$RCFILE" ] && touch "$RCFILE"
-    if ! grep -q "gitmind" "$RCFILE"; then
-        printf '\n# GitMind\nalias gitmind="%s"\n%s\n' "$LAUNCHER" "$LAUNCHER" >> "$RCFILE"
+    if ! grep -q "gitlane" "$RCFILE"; then
+        printf '\n# Gitlane\nalias gitlane="%s"\n%s\n' "$LAUNCHER" "$LAUNCHER" >> "$RCFILE"
         echo "✅  Also added to ~/.zshrc for terminal UI"
     fi ;;
-  *) echo "⏭️   Skipped — run manually: ./gitmind.sh" ;;
+  *) echo "⏭️   Skipped — run manually: ./gitlane.sh" ;;
 esac
 
 echo ""
 echo "╔═══════════════════════════════════════╗"
-echo "║   ✅ Done! Run: ./gitmind.sh          ║"
+echo "║   ✅ Done! Run: ./gitlane.sh          ║"
 echo "╚═══════════════════════════════════════╝"
 echo ""
-echo "  GitMind will guide you through setup on first run."
+echo "  Gitlane will guide you through setup on first run."
 echo "  You just need a free Groq API key:"
 echo "  → https://console.groq.com"
 echo ""

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { GitMindDb } from "./db";
+import { GitlaneDb } from "./db";
 import { dbPath, getProjectRoot } from "./env";
 import * as fs from "fs";
 
@@ -25,8 +25,8 @@ export class StatusBar {
 
   constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    this.item.command = "gitmind.showMenu";
-    this.item.tooltip = "Click for GitMind menu";
+    this.item.command = "gitlane.showMenu";
+    this.item.tooltip = "Click for Gitlane menu";
     this.item.show();
     this.render();
   }
@@ -71,7 +71,7 @@ export class StatusBar {
       return;
     }
     try {
-      const db = new GitMindDb(dbPath(root));
+      const db = new GitlaneDb(dbPath(root));
       const stats = await db.getStats();
       this.streak = stats.streak;
       this.dbReady = true;
@@ -93,8 +93,8 @@ export class StatusBar {
 
   private render(): void {
     if (!this.dbReady) {
-      this.item.text = "$(gear) GitMind: set up";
-      this.item.tooltip = "Click to pick the GitMind project folder";
+      this.item.text = "$(gear) Gitlane: set up";
+      this.item.tooltip = "Click to pick the Gitlane project folder";
       this.item.backgroundColor = undefined;
       return;
     }

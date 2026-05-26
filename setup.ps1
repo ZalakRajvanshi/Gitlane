@@ -1,9 +1,9 @@
-# GitMind Setup for Windows
+# Gitlane Setup for Windows
 # Run: Unblock-File .\setup.ps1; .\setup.ps1
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "   GitMind Setup (Windows)"              -ForegroundColor Cyan
+Write-Host "   Gitlane Setup (Windows)"              -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -44,14 +44,14 @@ Write-Host "OK: Packages installed" -ForegroundColor Green
 New-Item -ItemType Directory -Force -Path "$DIR\data" | Out-Null
 New-Item -ItemType Directory -Force -Path "$DIR\logs" | Out-Null
 
-# Create gitmind.bat
+# Create gitlane.bat
 $batContent = "@echo off`r`ncall `"$VENV\Scripts\activate.bat`"`r`ncd /d `"$DIR`"`r`npython main.py %*"
-[System.IO.File]::WriteAllText("$DIR\gitmind.bat", $batContent, [System.Text.Encoding]::ASCII)
-Write-Host "OK: gitmind.bat created" -ForegroundColor Green
+[System.IO.File]::WriteAllText("$DIR\gitlane.bat", $batContent, [System.Text.Encoding]::ASCII)
+Write-Host "OK: gitlane.bat created" -ForegroundColor Green
 
 # Add to PATH
 Write-Host ""
-$addPath = Read-Host "Add gitmind to PATH so you can run it from anywhere? [Y/n]"
+$addPath = Read-Host "Add gitlane to PATH so you can run it from anywhere? [Y/n]"
 if ($addPath -ne "n" -and $addPath -ne "N") {
     $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
     if ($currentPath -notlike "*$DIR*") {
@@ -64,7 +64,7 @@ if ($addPath -ne "n" -and $addPath -ne "N") {
 
 # Daily notification schedule
 Write-Host ""
-$startup = Read-Host "Schedule a daily GitMind notification? [Y/n]"
+$startup = Read-Host "Schedule a daily Gitlane notification? [Y/n]"
 if ($startup -ne "n" -and $startup -ne "N") {
     $timeInput = Read-Host "What time should it run? (e.g. 18:00 for 6 PM, 09:00 for 9 AM)"
     try {
@@ -73,7 +73,7 @@ if ($startup -ne "n" -and $startup -ne "N") {
         Write-Host "Invalid time format, defaulting to 18:00" -ForegroundColor Yellow
         $parsedTime = [datetime]::ParseExact("18:00", "HH:mm", $null)
     }
-    $taskName   = "GitMind_Daily"
+    $taskName   = "Gitlane_Daily"
     $pythonExe  = "$VENV\Scripts\python.exe"
     $scriptPath = "$DIR\main.py"
     $action     = New-ScheduledTaskAction -Execute $pythonExe -Argument "`"$scriptPath`" --notify" -WorkingDirectory $DIR
@@ -86,7 +86,7 @@ if ($startup -ne "n" -and $startup -ne "N") {
 
 # Add to PowerShell profile (runs when terminal opens)
 Write-Host ""
-$addProfile = Read-Host "Run GitMind every time you open PowerShell? [Y/n]"
+$addProfile = Read-Host "Run Gitlane every time you open PowerShell? [Y/n]"
 if ($addProfile -ne "n" -and $addProfile -ne "N") {
     $profileDir = Split-Path $PROFILE
     if (-not (Test-Path $profileDir)) {
@@ -96,8 +96,8 @@ if ($addProfile -ne "n" -and $addProfile -ne "N") {
         New-Item -ItemType File -Force -Path $PROFILE | Out-Null
     }
     $existing = Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue
-    if ($existing -notlike "*gitmind*") {
-        $line = "`n# GitMind`n$DIR\gitmind.bat"
+    if ($existing -notlike "*gitlane*") {
+        $line = "`n# Gitlane`n$DIR\gitlane.bat"
         Add-Content -Path $PROFILE -Value $line -Encoding UTF8
         Write-Host "OK: Added to PowerShell profile" -ForegroundColor Green
     } else {
@@ -110,13 +110,13 @@ Write-Host "========================================" -ForegroundColor Green
 Write-Host "   Setup complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Run GitMind now:" -ForegroundColor White
-Write-Host "  .\gitmind.bat" -ForegroundColor Cyan
+Write-Host "Run Gitlane now:" -ForegroundColor White
+Write-Host "  .\gitlane.bat" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "You need a FREE Groq API key - GitMind will ask for it." -ForegroundColor Yellow
+Write-Host "You need a FREE Groq API key - Gitlane will ask for it." -ForegroundColor Yellow
 Write-Host "Get it at: https://console.groq.com" -ForegroundColor Yellow
 Write-Host ""
-Read-Host "Press Enter to launch GitMind now"
+Read-Host "Press Enter to launch Gitlane now"
 
 Set-Location $DIR
 & "$VENV\Scripts\Activate.ps1"

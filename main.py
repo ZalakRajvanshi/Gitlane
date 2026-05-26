@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GitMind -- entrypoint
+Gitlane -- entrypoint
 Usage:
   python main.py            -> startup mode (default, runs on terminal open)
   python main.py --cli      -> interactive menu only
@@ -59,7 +59,7 @@ def main():
         venv_py = os.path.join(here, ".venv", "Scripts", "python.exe")
         py = venv_py if os.path.exists(venv_py) else sys.executable
         ps = f"""
-$task = 'GitMind_Daily'
+$task = 'Gitlane_Daily'
 $action = New-ScheduledTaskAction -Execute '{py}' -Argument '"{os.path.join(here,'main.py')}" --notify' -WorkingDirectory '{here}'
 $trigger = New-ScheduledTaskTrigger -Daily -At ([datetime]::ParseExact('{hh:02d}:{mm:02d}','HH:mm',$null))
 $trigger.StartBoundary = ([datetime]::Today.AddHours({hh}).AddMinutes({mm})).ToString('s')
@@ -123,7 +123,7 @@ Write-Host ('Scheduled. Next run: ' + $next)
             commits    = gh.fetch_all_recent(7)
             file_stats = gh.get_file_stats(7)
             answer     = ai.answer_question(question, commits, file_stats)
-        console.print(Panel(answer, title="[bold]GitMind[/bold]", border_style="cyan"))
+        console.print(Panel(answer, title="[bold]Gitlane[/bold]", border_style="cyan"))
 
     # Default: normal terminal UI, NO browser, NO notification
     else:

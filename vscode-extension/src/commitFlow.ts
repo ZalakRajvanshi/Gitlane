@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import { ensureProjectRoot, readEnv, loadSettingsJson, dbPath } from "./env";
-import { GitMindDb } from "./db";
+import { GitlaneDb } from "./db";
 import { generateCommitMessage, modelFromSettings } from "./groq";
 import { createRepo } from "./github";
 import { scanFile, autofixFile, ensureGitignore, appendToGitignore, BLOCKED_FILENAMES, Finding } from "./scanner";
@@ -11,7 +11,7 @@ import * as git from "./gitOps";
 async function pickRepoPath(): Promise<string | undefined> {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
-    vscode.window.showErrorMessage("Open a folder in VS Code to use GitMind.");
+    vscode.window.showErrorMessage("Open a folder in VS Code to use Gitlane.");
     return;
   }
   if (folders.length === 1) return folders[0].uri.fsPath;
@@ -32,14 +32,14 @@ export async function runCommitFlow(): Promise<void> {
   const env = readEnv(projectRoot);
   if (!env.GROQ_API_KEY) {
     vscode.window.showErrorMessage(
-      "GROQ_API_KEY missing from .env in the GitMind project folder.",
+      "GROQ_API_KEY missing from .env in the Gitlane project folder.",
     );
     return;
   }
 
   try {
     await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: "GitMind", cancellable: false },
+      { location: vscode.ProgressLocation.Notification, title: "Gitlane", cancellable: false },
       async progress => {
         progress.report({ message: "Checking repo…" });
         const created = ensureGitignore(repoPath);
@@ -111,7 +111,7 @@ export async function runCommitFlow(): Promise<void> {
         }
 
         const description = await vscode.window.showInputBox({
-          prompt: "What did you change? (one line — GitMind writes the full message)",
+          prompt: "What did you change? (one line — Gitlane writes the full message)",
           placeHolder: "e.g. add password reset flow",
         });
         if (description === undefined) return;
@@ -150,7 +150,7 @@ export async function runCommitFlow(): Promise<void> {
         // Mirror the Python flow: write today's log to the shared DB so the
         // 6 PM digest + dashboard see the activity.
         try {
-          const db = new GitMindDb(dbPath(projectRoot));
+          const db = new GitlaneDb(dbPath(projectRoot));
           await db.upsertDay("committed", finalMsg, [path.basename(repoPath)]);
         } catch {
           // non-fatal
@@ -200,6 +200,6 @@ export async function runCommitFlow(): Promise<void> {
       },
     );
   } catch (e: any) {
-    vscode.window.showErrorMessage(`GitMind: ${e.message || e}`);
+    vscode.window.showErrorMessage(`Gitlane: ${e.message || e}`);
   }
 }
