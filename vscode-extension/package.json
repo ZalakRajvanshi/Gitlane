@@ -2,7 +2,7 @@
   "name": "gitlane",
   "displayName": "Gitlane — AI Commits & Secret Guard",
   "description": "AI commit messages (Conventional Commits) + automatic secret detection and auto-fix to .env. One-click commit, push, and GitHub repo creation. A free, local Copilot alternative for commit messages.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "zalakrajvanshi",
   "license": "MIT",
   "icon": "icon.png",
@@ -45,10 +45,27 @@
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      { "command": "gitlane.commitNow",     "title": "Gitlane: Commit Now (AI message + secret scan + push)" },
-      { "command": "gitlane.ask",           "title": "Gitlane: Ask a Question About My Work" },
-      { "command": "gitlane.openDashboard", "title": "Gitlane: Open Dashboard (Browser)" },
-      { "command": "gitlane.showMenu",      "title": "Gitlane: Show Menu" }
+      { "command": "gitlane.commitNow",              "title": "Gitlane: Commit Now (AI message + secret scan + push)" },
+      { "command": "gitlane.generateCommitMessage",  "title": "Gitlane: Generate AI Commit Message",                  "icon": "$(sparkle)" },
+      { "command": "gitlane.ask",                    "title": "Gitlane: Ask a Question About My Work" },
+      { "command": "gitlane.openDashboard",          "title": "Gitlane: Open Dashboard (Browser)" },
+      { "command": "gitlane.showMenu",               "title": "Gitlane: Show Menu" }
+    ],
+    "menus": {
+      "scm/title": [
+        {
+          "command": "gitlane.generateCommitMessage",
+          "group": "navigation",
+          "when": "scmProvider == git"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "gitlane.generateCommitMessage",
+        "key":     "ctrl+alt+m",
+        "mac":     "cmd+alt+m"
+      }
     ],
     "configuration": {
       "title": "Gitlane",

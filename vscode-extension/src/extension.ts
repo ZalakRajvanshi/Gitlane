@@ -6,6 +6,7 @@ import { GitlaneDb } from "./db";
 import { answerQuestion, modelFromSettings } from "./groq";
 import { fetchAllRecent } from "./github";
 import { setContext } from "./state";
+import { generateCommitMessageCommand } from "./scmCommand";
 
 let statusBar: StatusBar | undefined;
 
@@ -20,10 +21,11 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("gitlane.commitNow",     runCommitFlow),
-    vscode.commands.registerCommand("gitlane.ask",           askQuestion),
-    vscode.commands.registerCommand("gitlane.openDashboard", openDashboard),
-    vscode.commands.registerCommand("gitlane.showMenu",      showMenu),
+    vscode.commands.registerCommand("gitlane.commitNow",             runCommitFlow),
+    vscode.commands.registerCommand("gitlane.generateCommitMessage", generateCommitMessageCommand),
+    vscode.commands.registerCommand("gitlane.ask",                   askQuestion),
+    vscode.commands.registerCommand("gitlane.openDashboard",         openDashboard),
+    vscode.commands.registerCommand("gitlane.showMenu",              showMenu),
   );
 
   // Off the activation hot path: project-root prompt (first run only) + initial refresh.
