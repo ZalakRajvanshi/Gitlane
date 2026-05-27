@@ -2,17 +2,20 @@ import * as vscode from "vscode";
 import { GitlaneDb } from "./db";
 import { dbPath, getProjectRoot } from "./env";
 import * as fs from "fs";
+import * as path from "path";
+
+type GitRepo = {
+  rootUri: vscode.Uri;
+  state: {
+    indexChanges: unknown[];
+    workingTreeChanges: unknown[];
+    onDidChange: vscode.Event<void>;
+  };
+};
 
 type GitAPI = {
-  repositories: Array<{
-    rootUri: vscode.Uri;
-    state: {
-      indexChanges: unknown[];
-      workingTreeChanges: unknown[];
-      onDidChange: vscode.Event<void>;
-    };
-  }>;
-  onDidOpenRepository: vscode.Event<{ rootUri: vscode.Uri; state: { onDidChange: vscode.Event<void> } }>;
+  repositories: GitRepo[];
+  onDidOpenRepository: vscode.Event<GitRepo>;
 };
 
 export class StatusBar {
@@ -26,7 +29,6 @@ export class StatusBar {
   constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     this.item.command = "gitlane.showMenu";
-    this.item.tooltip = "Click for Gitlane menu";
     this.item.show();
     this.render();
   }
@@ -81,14 +83,34 @@ export class StatusBar {
     this.render();
   }
 
-  private dirtyCount(): number {
+  /** Repo the user is actively editing in (follows the active editor). */
+  private activeRepo(): GitRepo | undefined {
     const gitExt = vscode.extensions.getExtension<{ getAPI(v: number): GitAPI }>("vscode.git");
-    if (!gitExt?.isActive) return 0;
+    if (!gitExt?.isActive) return undefined;
     const git = gitExt.exports.getAPI(1);
-    return git.repositories.reduce(
-      (n, r) => n + r.state.indexChanges.length + r.state.workingTreeChanges.length,
-      0,
-    );
+    if (git.repositories.length === 0) return undefined;
+    if (git.repositories.length === 1) return git.repositories[0];
+
+    // Multi-repo: pick the one that owns the active file.
+    const active = vscode.window.activeTextEditor?.document.uri.fsPath;
+    if (active) {
+      const hit = git.repositories.find(r => {
+        const root = r.rootUri.fsPath;
+        return active === root || active.startsWith(root + path.sep);
+      });
+      if (hit) return hit;
+    }
+    // No active file → fall back to the first workspace folder's repo, if any.
+    const firstWs = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    return git.repositories.find(r => r.rootUri.fsPath === firstWs) ?? git.repositories[0];
+  }
+
+  private repoName(repo: GitRepo): string {
+    return path.basename(repo.rootUri.fsPath);
+  }
+
+  private dirtyCountFor(repo: GitRepo): number {
+    return repo.state.indexChanges.length + repo.state.workingTreeChanges.length;
   }
 
   private render(): void {
@@ -98,13 +120,30 @@ export class StatusBar {
       this.item.backgroundColor = undefined;
       return;
     }
-    const dirty = this.dirtyCount();
-    const streakPart = this.streak > 0 ? `🔥 ${this.streak}` : "⚡";
-    if (dirty > 0) {
-      this.item.text = `${streakPart} · ${dirty} to commit`;
+
+    const repo  = this.activeRepo();
+    const dirty = repo ? this.dirtyCountFor(repo) : 0;
+    const name  = repo ? this.repoName(repo) : undefined;
+
+    const streakLine = this.streak > 0
+      ? `🔥 ${this.streak} day streak`
+      : "Working with Gitlane";
+
+    if (dirty > 0 && name) {
+      this.item.text = `$(shield) ${name} · ${dirty} change${dirty === 1 ? "" : "s"}`;
+      this.item.tooltip = `${streakLine}\n${dirty} uncommitted change${dirty === 1 ? "" : "s"} in ${name}\n\nClick for menu`;
       this.item.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
+    } else if (name) {
+      this.item.text = this.streak > 0
+        ? `$(shield) ${this.streak} day streak`
+        : `$(shield) ${name}`;
+      this.item.tooltip = `Working in ${name}\n${this.streak > 0 ? `${this.streak} day streak — nothing to commit` : "Nothing to commit"}\n\nClick for menu`;
+      this.item.backgroundColor = undefined;
     } else {
-      this.item.text = `${streakPart} ✓`;
+      this.item.text = this.streak > 0
+        ? `$(shield) ${this.streak} day streak`
+        : "$(shield) Gitlane ready";
+      this.item.tooltip = "No git repo in this window\n\nClick for menu";
       this.item.backgroundColor = undefined;
     }
   }

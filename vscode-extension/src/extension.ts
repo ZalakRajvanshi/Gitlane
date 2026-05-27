@@ -5,12 +5,19 @@ import { ensureProjectRoot, readEnv, loadSettingsJson, dbPath } from "./env";
 import { GitlaneDb } from "./db";
 import { answerQuestion, modelFromSettings } from "./groq";
 import { fetchAllRecent } from "./github";
+import { setContext } from "./state";
 
 let statusBar: StatusBar | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
+  setContext(context);
   statusBar = new StatusBar();
   context.subscriptions.push({ dispose: () => statusBar?.dispose() });
+
+  // Status bar's project label follows the active editor.
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(() => statusBar?.refresh()),
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand("gitlane.commitNow",     runCommitFlow),

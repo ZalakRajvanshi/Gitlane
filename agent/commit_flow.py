@@ -247,27 +247,46 @@ def _get_or_set_projects_folder() -> str | None:
     save(cfg)
     return folder
 
+
+def _cwd_repo() -> dict | None:
+    """If the current working directory is in a git repo, return it as a
+    {name, path} dict. Walks up to 3 parents so 'gitlane commit' inside a
+    nested subfolder still works without asking 'which repo'."""
+    import os
+    cwd = Path(os.getcwd())
+    for p in [cwd] + list(cwd.parents)[:3]:
+        if (p / ".git").exists():
+            resolved = p.resolve()
+            return {"name": resolved.name, "path": str(resolved)}
+    return None
+
 # ── MAIN FLOW ─────────────────────────────────────────────────
 
 def run_commit_flow():
     console.print()
 
-    folder = _get_or_set_projects_folder()
-    if not folder:
-        return
+    # Fast path: if the user already cd'd into a git repo, just use it.
+    # No projects-folder picker, no list. This is the common case.
+    repo = _cwd_repo()
+    if repo:
+        console.print(f"  [dim]Current folder:[/dim] [cyan]{repo['name']}[/cyan]")
+    else:
+        folder = _get_or_set_projects_folder()
+        if not folder:
+            return
 
-    import os
-    repos = gm.find_git_repos(folder, cwd=os.getcwd())
-    if not repos:
-        console.print(f"[yellow]  No git repos found in {folder}[/yellow]")
-        cfg = load()
-        cfg.pop("projects_folder", None)
-        save(cfg)
-        return
+        import os
+        repos = gm.find_git_repos(folder, cwd=os.getcwd())
+        if not repos:
+            console.print(f"[yellow]  No git repos found in {folder}[/yellow]")
+            cfg = load()
+            cfg.pop("projects_folder", None)
+            save(cfg)
+            return
 
-    repo = _pick_repo(repos)
-    if not repo:
-        return
+        repo = _pick_repo(repos)
+        if not repo:
+            return
 
     repo_path = repo["path"]
     repo_name = repo["name"]

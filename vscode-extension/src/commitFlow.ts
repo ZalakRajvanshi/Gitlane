@@ -7,18 +7,46 @@ import { generateCommitMessage, modelFromSettings } from "./groq";
 import { createRepo } from "./github";
 import { scanFile, autofixFile, ensureGitignore, appendToGitignore, BLOCKED_FILENAMES, Finding } from "./scanner";
 import * as git from "./gitOps";
+import { getLastRepoPath, setLastRepoPath } from "./state";
 
+/**
+ * Pick which workspace folder to commit into. Priority:
+ *   1. Active editor's workspace folder (you committed where you're typing)
+ *   2. Last folder you committed to in this workspace
+ *   3. Quick-pick over all workspace folders, with last-used marked
+ *
+ * Single-folder workspaces skip the picker entirely.
+ */
 async function pickRepoPath(): Promise<string | undefined> {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
     vscode.window.showErrorMessage("Open a folder in VS Code to use Gitlane.");
     return;
   }
-  if (folders.length === 1) return folders[0].uri.fsPath;
-  const pick = await vscode.window.showQuickPick(
-    folders.map(f => ({ label: f.name, description: f.uri.fsPath, path: f.uri.fsPath })),
-    { placeHolder: "Which workspace folder?" },
-  );
+  if (folders.length === 1) {
+    setLastRepoPath(folders[0].uri.fsPath);
+    return folders[0].uri.fsPath;
+  }
+
+  // The folder of the file you're currently editing wins.
+  const activeUri = vscode.window.activeTextEditor?.document.uri;
+  if (activeUri) {
+    const owner = vscode.workspace.getWorkspaceFolder(activeUri);
+    if (owner) {
+      setLastRepoPath(owner.uri.fsPath);
+      return owner.uri.fsPath;
+    }
+  }
+
+  // Otherwise show the picker, with the last-used folder marked.
+  const last = getLastRepoPath();
+  const items = folders.map(f => ({
+    label: f.name + (f.uri.fsPath === last ? "  $(history) last used" : ""),
+    description: f.uri.fsPath,
+    path: f.uri.fsPath,
+  }));
+  const pick = await vscode.window.showQuickPick(items, { placeHolder: "Which workspace folder?" });
+  if (pick?.path) setLastRepoPath(pick.path);
   return pick?.path;
 }
 
