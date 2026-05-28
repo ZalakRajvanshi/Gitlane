@@ -130,19 +130,19 @@ export class StatusBar {
       : "Working with Gitlane";
 
     if (dirty > 0 && name) {
-      this.item.text = `$(shield) ${name} · ${dirty} change${dirty === 1 ? "" : "s"}`;
+      this.item.text = `≫ ${name} · ${dirty} change${dirty === 1 ? "" : "s"}`;
       this.item.tooltip = `${streakLine}\n${dirty} uncommitted change${dirty === 1 ? "" : "s"} in ${name}\n\nClick for menu`;
       this.item.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
     } else if (name) {
       this.item.text = this.streak > 0
-        ? `$(shield) ${this.streak} day streak`
-        : `$(shield) ${name}`;
+        ? `≫ ${this.streak} day streak`
+        : `≫ ${name}`;
       this.item.tooltip = `Working in ${name}\n${this.streak > 0 ? `${this.streak} day streak — nothing to commit` : "Nothing to commit"}\n\nClick for menu`;
       this.item.backgroundColor = undefined;
     } else {
       this.item.text = this.streak > 0
-        ? `$(shield) ${this.streak} day streak`
-        : "$(shield) Gitlane ready";
+        ? `≫ ${this.streak} day streak`
+        : "≫ Gitlane ready";
       this.item.tooltip = "No git repo in this window\n\nClick for menu";
       this.item.backgroundColor = undefined;
     }
