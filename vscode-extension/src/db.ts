@@ -110,7 +110,7 @@ export interface Sprint {
   retro: string;
 }
 
-export class GitlaneDb {
+export class GitbuddyDb {
   constructor(private file: string) {}
 
   async getStats(): Promise<Stats> {

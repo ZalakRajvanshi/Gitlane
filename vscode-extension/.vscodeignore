@@ -11,3 +11,11 @@ node_modules/typescript/**
 node_modules/@types/**
 node_modules/.bin/**
 *.vsix
+
+# sql.js ships five builds of the same engine; db.ts loads sql-wasm only.
+# Shipping the asm.js and debug variants added ~15 MB to the package.
+node_modules/sql.js/dist/sql-asm*
+node_modules/sql.js/dist/worker.*
+node_modules/sql.js/dist/*debug*
+node_modules/sql.js/src/**
+node_modules/sql.js/dist/sql-wasm-browser*

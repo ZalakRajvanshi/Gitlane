@@ -12,6 +12,26 @@ function run(cmd: string, args: string[], cwd: string): Promise<{ code: number; 
   });
 }
 
+/**
+ * Is git actually on this machine?
+ *
+ * Without this check a missing git looks like a broken extension: spawn fails
+ * with ENOENT, `run` reports code 1, `isGitRepo` says false, and the user gets
+ * offered a `git init` that then fails with "spawn git ENOENT". Plenty of
+ * people install VS Code before they install git, so this is a real first-run
+ * path, not an edge case.
+ *
+ * Cached, because it can't change without a restart of the machine's PATH.
+ */
+let gitAvailable: boolean | undefined;
+
+export async function isGitAvailable(): Promise<boolean> {
+  if (gitAvailable !== undefined) return gitAvailable;
+  const r = await run("git", ["--version"], process.cwd());
+  gitAvailable = r.code === 0 && /git version/i.test(r.stdout);
+  return gitAvailable;
+}
+
 export async function isGitRepo(repoPath: string): Promise<boolean> {
   const r = await run("git", ["rev-parse", "--is-inside-work-tree"], repoPath);
   return r.code === 0 && r.stdout.trim() === "true";
@@ -44,6 +64,25 @@ export async function stageAll(repoPath: string): Promise<{ ok: boolean; err: st
 
 export async function unstage(repoPath: string, file: string): Promise<void> {
   await run("git", ["reset", "HEAD", file], repoPath);
+}
+
+export interface StagedEntry {
+  /** "A" added, "M" modified, "D" deleted, "R" renamed. */
+  status: string;
+  file: string;
+}
+
+/**
+ * Added vs modified vs deleted, which `--stat` doesn't tell us. This is the
+ * signal the offline message generator runs on: adding files reads as a
+ * feature, changing them reads as a fix, and removing them doesn't.
+ */
+export async function stagedNameStatus(repoPath: string): Promise<StagedEntry[]> {
+  const r = await run("git", ["diff", "--staged", "--name-status"], repoPath);
+  return r.stdout.split("\n").filter(Boolean).map(line => {
+    const [status, ...rest] = line.split(/\s+/);
+    return { status: status.charAt(0), file: rest[rest.length - 1] ?? "" };
+  }).filter(e => e.file);
 }
 
 export async function stagedDiff(repoPath: string): Promise<string> {

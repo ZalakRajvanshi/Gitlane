@@ -1,13 +1,33 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
-import { ensureProjectRoot, readEnv, loadSettingsJson, dbPath } from "./env";
-import { GitlaneDb } from "./db";
-import { generateCommitMessage, modelFromSettings } from "./groq";
+import { dbPath } from "./env";
+import { getGithubToken, getGithubUsername } from "./credentials";
+import { GitbuddyDb } from "./db";
+import { generateCommitMessage, resolveProvider } from "./ai";
 import { createRepo, getRepoIfExists } from "./github";
 import { scanFile, autofixFile, ensureGitignore, appendToGitignore, BLOCKED_FILENAMES, Finding } from "./scanner";
 import * as git from "./gitOps";
 import { getLastRepoPath, setLastRepoPath } from "./state";
+
+/**
+ * VS Code runs fine without git installed; this extension does not. Check once
+ * and say so plainly, with somewhere to go — otherwise every git call fails
+ * with ENOENT and the extension just looks broken.
+ */
+export async function requireGit(): Promise<boolean> {
+  if (await git.isGitAvailable()) return true;
+  const INSTALL = "Download Git";
+  const choice = await vscode.window.showErrorMessage(
+    "Git isn't installed, or isn't on your PATH — Gitbuddy needs it to stage and commit. " +
+    "Install it, then restart VS Code.",
+    INSTALL,
+  );
+  if (choice === INSTALL) {
+    await vscode.env.openExternal(vscode.Uri.parse("https://git-scm.com/downloads"));
+  }
+  return false;
+}
 
 /**
  * Pick which workspace folder to commit into. Priority:
@@ -20,7 +40,7 @@ import { getLastRepoPath, setLastRepoPath } from "./state";
 async function pickRepoPath(): Promise<string | undefined> {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
-    vscode.window.showErrorMessage("Open a folder in VS Code to use Gitlane.");
+    vscode.window.showErrorMessage("Open a folder in VS Code to use Gitbuddy.");
     return;
   }
   if (folders.length === 1) {
@@ -75,9 +95,15 @@ async function pushOrSetupRemote(
     return;
   }
 
+  // No remote yet, so we're about to create a repo — this is the moment where
+  // interrupting for a GitHub sign-in is justified.
+  if (!token) {
+    token = await getGithubToken(true);
+    if (!username) username = await getGithubUsername(true);
+  }
   if (!token) {
     vscode.window.showErrorMessage(
-      "No GitHub remote and no GITHUB_TOKEN to create one. Add GITHUB_TOKEN to your Gitlane .env, or set up a remote manually.",
+      "Sign in to GitHub to have Gitbuddy create the repo for you, or add a remote manually with `git remote add origin …`.",
     );
     return;
   }
@@ -130,24 +156,16 @@ async function pushOrSetupRemote(
 }
 
 export async function runCommitFlow(): Promise<void> {
-  const projectRoot = await ensureProjectRoot();
-  if (!projectRoot) return;
+  if (!(await requireGit())) return;
 
   const repoPath = await pickRepoPath();
   if (!repoPath) return;
 
-  const env = readEnv(projectRoot);
-  if (!env.GROQ_API_KEY) {
-    vscode.window.showErrorMessage(
-      "GROQ_API_KEY missing from .env in the Gitlane project folder.",
-    );
-    return;
-  }
-
   // Hoisted: needed both in the post-commit push and the "nothing-to-commit-
-  // but-you-have-unpushed-stuff" recovery branch below.
-  const settings = loadSettingsJson(projectRoot);
-  const username = (settings.github_username as string) || "";
+  // but-you-have-unpushed-stuff" recovery branch below. Non-interactive here —
+  // signing in is only worth interrupting for when we actually need to push.
+  const githubToken = await getGithubToken(false);
+  const username    = await getGithubUsername(false);
 
   // Caught-in-the-wild: scaffolders / copy-pasted snippets leave a remote
   // like "https://github.com/YOUR_USERNAME/repo.git" wired up. hasRemote()
@@ -164,12 +182,12 @@ export async function runCommitFlow(): Promise<void> {
       if (!choice) return;
       let newUrl: string | undefined;
       if (choice === "Pick from my GitHub repos") {
-        if (!env.GITHUB_TOKEN || !username) {
-          vscode.window.showErrorMessage("Need GITHUB_TOKEN + github_username in the Gitlane install. Falling back to manual entry.");
+        if (!githubToken || !username) {
+          vscode.window.showErrorMessage("Not signed in to GitHub. Falling back to manual entry.");
           newUrl = await vscode.window.showInputBox({ prompt: "Correct GitHub URL", value: bogus });
         } else {
           const defaultName = path.basename(repoPath).toLowerCase().replace(/[ _]/g, "-");
-          const existing = await getRepoIfExists(env.GITHUB_TOKEN, username, defaultName);
+          const existing = await getRepoIfExists(githubToken, username, defaultName);
           if (existing) {
             newUrl = existing.clone_url;
           } else {
@@ -213,7 +231,7 @@ export async function runCommitFlow(): Promise<void> {
 
   try {
     await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: "Gitlane", cancellable: false },
+      { location: vscode.ProgressLocation.Notification, title: "Gitbuddy", cancellable: false },
       async progress => {
         progress.report({ message: "Checking repo…" });
         const created = ensureGitignore(repoPath);
@@ -232,7 +250,7 @@ export async function runCommitFlow(): Promise<void> {
             const choice = await vscode.window.showInformationMessage(msg, { modal: false }, "Yes");
             if (choice === "Yes") {
               progress.report({ message: "Pushing…" });
-              await pushOrSetupRemote(repoPath, username, env.GITHUB_TOKEN);
+              await pushOrSetupRemote(repoPath, username, githubToken);
             }
             return;
           }
@@ -299,20 +317,26 @@ export async function runCommitFlow(): Promise<void> {
           return;
         }
 
+        // Everything above this line — the scan, the auto-fix, the .gitignore
+        // repair — is offline and keyless. Only the message needs a model, so
+        // this is the first and only point where we ask for a key. Ask before
+        // the description prompt, so we never collect one and then bail.
+        // Never blocks: with no Copilot and no key this resolves to the
+        // offline generator, so the user is never stopped to set anything up.
+        const ai = await resolveProvider(true);
+
         const description = await vscode.window.showInputBox({
-          prompt: "What did you change? (one line — Gitlane writes the full message)",
+          prompt: "What did you change? (one line — or leave blank and Gitbuddy works it out)",
           placeHolder: "e.g. add password reset flow",
         });
         if (description === undefined) return;
 
-        progress.report({ message: "Generating commit message…" });
-        const diff = await git.stagedDiff(repoPath);
-        const model = modelFromSettings(projectRoot);
-        const message = await generateCommitMessage(
-          { apiKey: env.GROQ_API_KEY!, model },
-          staged,
-          diff || description,
-        );
+        progress.report({ message: "Writing the commit message…" });
+        const diff    = await git.stagedDiff(repoPath);
+        const entries = await git.stagedNameStatus(repoPath);
+        const message = await generateCommitMessage(ai, {
+          files: staged, diff, entries, description: description.trim() || undefined,
+        });
 
         const action = await vscode.window.showInformationMessage(
           `Commit message:\n\n${message}`,
@@ -337,7 +361,7 @@ export async function runCommitFlow(): Promise<void> {
         // Mirror the Python flow: write today's log to the shared DB so the
         // 6 PM digest + dashboard see the activity.
         try {
-          const db = new GitlaneDb(dbPath(projectRoot));
+          const db = new GitbuddyDb(dbPath());
           await db.upsertDay("committed", finalMsg, [path.basename(repoPath)]);
         } catch {
           // non-fatal
@@ -349,10 +373,10 @@ export async function runCommitFlow(): Promise<void> {
         }
 
         progress.report({ message: "Pushing…" });
-        await pushOrSetupRemote(repoPath, username, env.GITHUB_TOKEN);
+        await pushOrSetupRemote(repoPath, username, githubToken);
       },
     );
   } catch (e: any) {
-    vscode.window.showErrorMessage(`Gitlane: ${e.message || e}`);
+    vscode.window.showErrorMessage(`Gitbuddy: ${e.message || e}`);
   }
 }

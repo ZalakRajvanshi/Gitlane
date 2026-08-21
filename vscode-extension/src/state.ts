@@ -10,10 +10,14 @@ import * as vscode from "vscode";
  */
 let context: vscode.ExtensionContext | undefined;
 
-const LAST_REPO_KEY = "gitlane.lastRepoPath";
+const LAST_REPO_KEY = "gitbuddy.lastRepoPath";
 
 export function setContext(ctx: vscode.ExtensionContext): void {
   context = ctx;
+}
+
+export function getContext(): vscode.ExtensionContext | undefined {
+  return context;
 }
 
 export function getLastRepoPath(): string | undefined {

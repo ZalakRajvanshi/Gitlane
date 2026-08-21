@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { ensureProjectRoot, readEnv, loadSettingsJson } from "./env";
-import { generateCommitMessage, modelFromSettings } from "./groq";
+import { generateCommitMessage, resolveProvider } from "./ai";
+import { requireGit } from "./commitFlow";
 import * as git from "./gitOps";
 
 type GitRepo = {
@@ -24,14 +24,10 @@ type GitAPI = {
  * multi-root workspaces.
  */
 export async function generateCommitMessageCommand(arg?: vscode.SourceControl): Promise<void> {
-  const projectRoot = await ensureProjectRoot();
-  if (!projectRoot) return;
+  if (!(await requireGit())) return;
 
-  const env = readEnv(projectRoot);
-  if (!env.GROQ_API_KEY) {
-    vscode.window.showErrorMessage("GROQ_API_KEY missing from the Gitlane project's .env file.");
-    return;
-  }
+  // Always resolves — Copilot, an opt-in Groq key, or the offline generator.
+  const ai = await resolveProvider(true);
 
   const repo = await pickRepo(arg);
   if (!repo) {
@@ -54,22 +50,15 @@ export async function generateCommitMessageCommand(arg?: vscode.SourceControl): 
   }
 
   await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.SourceControl, title: "Gitlane: generating commit message…" },
+    { location: vscode.ProgressLocation.SourceControl, title: "Gitbuddy: writing commit message…" },
     async () => {
       try {
-        const model = modelFromSettings(projectRoot);
-        const msg = await generateCommitMessage(
-          { apiKey: env.GROQ_API_KEY!, model },
-          files,
-          diff,
-        );
+        const entries = await git.stagedNameStatus(repoPath);
+        const msg = await generateCommitMessage(ai, { files, diff, entries });
         repo.inputBox.value = msg;
       } catch (e: any) {
-        vscode.window.showErrorMessage(`Gitlane: ${e.message || e}`);
+        vscode.window.showErrorMessage(`Gitbuddy: ${e.message || e}`);
       }
-      // settings.json is read here only to keep the import alive for future use
-      // (e.g. project-specific commit-style overrides); intentional no-op call.
-      loadSettingsJson(projectRoot);
     },
   );
 }

@@ -1,10 +1,15 @@
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
+import { getContext } from "./state";
 
-const PROJECT_ROOT_KEY = "gitlane.projectRoot";
+const PROJECT_ROOT_KEY = "gitbuddy.projectRoot";
 
+/**
+ * The optional companion Python project (the CLI, the 6 PM digest, the
+ * browser dashboard). Linking it lets the editor and the CLI share one
+ * streak database; leaving it unset is the normal case and costs nothing.
+ */
 export function getProjectRoot(): string {
   return vscode.workspace.getConfiguration().get<string>(PROJECT_ROOT_KEY, "").trim();
 }
@@ -19,94 +24,31 @@ export function projectRootIsValid(p: string): boolean {
       || fs.existsSync(path.join(p, "data", "gitmind.db"));
 }
 
-/**
- * Scan the user's usual places for a Gitlane install (a folder with main.py
- * + the agent/ module + or a data/gitmind.db). We try the common Windows /
- * macOS / Linux home locations the user is likely to have cloned it into.
- * Returns the first match, or undefined.
- *
- * The goal is to make the picker dialog never fire — the user is the same
- * person who cloned Gitlane somewhere, so 90% of the time we can just find it.
- */
-export function autoDetectGitlaneInstall(): string | undefined {
-  const home = os.homedir();
-  const candidates = [
-    // The exact location this conversation's author uses
-    path.join(home, "OneDrive", "Desktop", "Projects", "gitmind_v2", "gitmind_v2"),
-    path.join(home, "OneDrive", "Desktop", "gitmind_v2", "gitmind_v2"),
-    path.join(home, "Desktop", "Projects", "gitmind_v2", "gitmind_v2"),
-    path.join(home, "Desktop", "gitmind_v2", "gitmind_v2"),
-    path.join(home, "gitmind_v2", "gitmind_v2"),
-    path.join(home, "Projects", "gitmind_v2", "gitmind_v2"),
-
-    // Common rename-to-"Gitlane" / "gitlane" locations
-    path.join(home, "OneDrive", "Desktop", "Projects", "Gitlane"),
-    path.join(home, "OneDrive", "Desktop", "Projects", "gitlane"),
-    path.join(home, "OneDrive", "Desktop", "Gitlane"),
-    path.join(home, "OneDrive", "Desktop", "gitlane"),
-    path.join(home, "Desktop", "Projects", "Gitlane"),
-    path.join(home, "Desktop", "Projects", "gitlane"),
-    path.join(home, "Desktop", "Gitlane"),
-    path.join(home, "Desktop", "gitlane"),
-    path.join(home, "Projects", "Gitlane"),
-    path.join(home, "Projects", "gitlane"),
-    path.join(home, "Gitlane"),
-    path.join(home, "gitlane"),
-
-    // GitHub Desktop / IDE conventional locations
-    path.join(home, "Documents", "GitHub", "Gitlane"),
-    path.join(home, "Documents", "GitHub", "gitlane"),
-    path.join(home, "OneDrive", "Documents", "GitHub", "Gitlane"),
-    path.join(home, "OneDrive", "Documents", "GitHub", "gitlane"),
-    path.join(home, "source", "repos", "Gitlane"),  // Visual Studio default
-    path.join(home, "source", "repos", "gitlane"),
-  ];
-
-  for (const c of candidates) {
-    if (projectRootIsValid(c)) return c;
-  }
-  return undefined;
+/** A linked project root, but only if it still exists on this machine. */
+export function linkedProjectRoot(): string | undefined {
+  const root = getProjectRoot();
+  return root && projectRootIsValid(root) ? root : undefined;
 }
 
-export async function ensureProjectRoot(): Promise<string | undefined> {
-  const current = getProjectRoot();
-  if (current && projectRootIsValid(current)) return current;
-
-  // Silent auto-detect: if we can find the install on this machine, just use
-  // it. No dialog, no questions. This is the same machine that cloned Gitlane,
-  // so 90% of the time we get it right and the user notices nothing.
-  const auto = autoDetectGitlaneInstall();
-  if (auto) {
-    await setProjectRoot(auto);
-    return auto;
-  }
-
-  const proceed = await vscode.window.showInformationMessage(
-    "Gitlane needs to know where you cloned its source code (the folder with main.py). " +
-    "This is the GITLANE PROJECT itself, not the project you want to commit. " +
-    "You only pick this once.",
-    { modal: false },
-    "Pick Gitlane source folder", "Later",
-  );
-  if (proceed !== "Pick Gitlane source folder") return undefined;
-
-  // Default the picker to the user's home so they don't accidentally land
-  // inside their current project folder.
+/**
+ * Explicit opt-in, from the menu. Nothing calls this on startup — the
+ * extension is fully functional without a linked project.
+ */
+export async function pickProjectRoot(): Promise<string | undefined> {
   const picked = await vscode.window.showOpenDialog({
     canSelectFolders: true,
     canSelectFiles: false,
     canSelectMany: false,
-    defaultUri: vscode.Uri.file(os.homedir()),
-    openLabel: "Use as Gitlane source",
-    title: "Pick the folder where you cloned github.com/ZalakRajvanshi/Gitlane (contains main.py)",
+    openLabel: "Link this folder",
+    title: "Pick your Gitlane Python project (the folder containing main.py)",
   });
-  if (!picked || picked.length === 0) return undefined;
+  if (!picked?.length) return undefined;
 
   const candidate = picked[0].fsPath;
   if (!projectRootIsValid(candidate)) {
     vscode.window.showErrorMessage(
-      `That folder doesn't contain main.py — it's not the Gitlane source. ` +
-      `Pick the folder you cloned from github.com/ZalakRajvanshi/Gitlane, not the project you want to commit.`,
+      "That folder has no main.py — it isn't the Gitlane Python project. " +
+      "This is optional: leave it unlinked and everything except the shared CLI database still works.",
     );
     return undefined;
   }
@@ -119,6 +61,7 @@ export interface EnvVars {
   GITHUB_TOKEN?: string;
 }
 
+/** Legacy path: read keys out of the linked project's .env. See credentials.ts. */
 export function readEnv(projectRoot: string): EnvVars {
   const envPath = path.join(projectRoot, ".env");
   if (!fs.existsSync(envPath)) return {};
@@ -139,12 +82,29 @@ export function readEnv(projectRoot: string): EnvVars {
   return out;
 }
 
-export function dbPath(projectRoot: string): string {
-  return path.join(projectRoot, "data", "gitmind.db");
+/**
+ * Where the streak database lives. A linked Python project wins, so the CLI
+ * and the editor stay in sync. Otherwise we keep our own copy in the
+ * extension's global storage, which is created on first write.
+ */
+export function dbPath(): string {
+  const linked = linkedProjectRoot();
+  if (linked) return path.join(linked, "data", "gitmind.db");
+
+  const storage = getContext()?.globalStorageUri.fsPath;
+  if (!storage) return "";
+  return path.join(storage, "gitmind.db");
 }
 
 export function loadSettingsJson(projectRoot: string): Record<string, unknown> {
   const f = path.join(projectRoot, "settings.json");
   if (!fs.existsSync(f)) return {};
   try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch { return {}; }
+}
+
+/** Last resort: a username from the linked Python project's settings.json. */
+export function legacyUsername(): string {
+  const linked = linkedProjectRoot();
+  if (!linked) return "";
+  return ((loadSettingsJson(linked).github_username as string) || "").trim();
 }

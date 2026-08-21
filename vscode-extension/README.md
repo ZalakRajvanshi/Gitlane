@@ -1,81 +1,153 @@
-# Gitlane — AI Commits & Secret Guard
+# Gitbuddy — Secret Guard & AI Commits
 
-**AI-generated commit messages, automatic secret detection in your staged files, and one-click push — all from the VS Code status bar.**
+**Catches the API key you were about to push, and fixes it for you.**
 
-A free, local alternative to GitHub Copilot for commit messages, with a secret scanner built in that doesn't just *block* leaked API keys, it **moves them to `.env` and rewrites your source for you**.
-
----
-
-## What it does
-
-| | |
-|---|---|
-| 🤖 **AI commit messages** | Type one line about what you changed. Gitlane writes the full Conventional Commits message via Groq (free, fast, no card). |
-| 🛡️ **Secret detection + auto-fix** | Staged files are scanned for API keys, tokens, passwords, OpenAI/Groq/GitHub keys, Google API keys. On hit, Gitlane moves the value to `.env`, replaces the source line with `os.getenv(...)` / `process.env.X`, and adds `.env` to `.gitignore`. |
-| 🚀 **One-click commit + push** | Stage → scan → fix → message → commit → push, all from one command. If there's no GitHub remote, Gitlane asks for a name and **creates the repo for you**. |
-| 🔥 **Streak in the status bar** | See your commit streak from any window. Status bar turns yellow with a file count the moment you change a file. |
-| 💬 **Ask about your work** | "What did I build last week?" — Gitlane reads your recent commits and answers. |
+No account. No API key. No sign-up. Install it, press one button, and it works.
 
 ---
 
-## Why Gitlane vs. the alternatives
+## The problem it solves
 
-| Tool | AI commit msg | Secret detection | **Secret auto-fix** | One-click push |
-|---|---|---|---|---|
-| GitHub Copilot | ✅ | ❌ | ❌ | ❌ |
-| GitLens | ❌ | ❌ | ❌ | ❌ |
-| Conventional Commits ext. | ❌ (template) | ❌ | ❌ | ❌ |
-| git-secrets / detect-secrets | ❌ | ✅ | ❌ (only blocks) | ❌ |
-| **Gitlane** | ✅ | ✅ | ✅ | ✅ |
+You're about to commit. Somewhere in the diff there's a line like this:
 
-The **secret auto-fix** is the move competitors don't make. Most tools see `API_KEY = "sk-…"` in your diff and refuse to let you commit. Gitlane sees it, moves the value out, rewrites your code, and lets you ship.
+```python
+OPENAI_API_KEY = "sk-proj-8fK2mNq..."
+```
+
+Every other tool either misses it, or blocks your commit and leaves you to clean up the mess yourself.
+
+Gitbuddy moves the value into `.env`, rewrites your source line to read from the environment, adds `.env` to `.gitignore`, and lets you carry on:
+
+```python
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+```
+
+| Tool | Detects secrets | **Fixes them** | AI commit message | Setup required |
+|---|:---:|:---:|:---:|:---:|
+| git-secrets / gitleaks | ✅ | ❌ blocks only | ❌ | CLI install |
+| GitHub Copilot | ❌ | ❌ | ✅ | subscription |
+| **Gitbuddy** | ✅ | ✅ | ✅ | **none** |
 
 ---
 
-## Setup
+## What happens when you install it
 
-1. Install this extension.
-2. Open any folder in VS Code → a banner appears asking for the Gitlane project folder. Pick it once.
-3. Status bar lights up. Done.
+Nothing pops up. Nothing is asked. A single item appears in your status bar:
 
-You'll also need:
-- A free **[Groq API key](https://console.groq.com)** in your project's `.env`
-- Optionally a **GitHub Personal Access Token** with `repo` scope for the auto-create-repo feature
+```
+≫ my-project · 3 changes
+```
 
-Gitlane reuses the `.env` and SQLite database from the [Gitlane Python project](https://github.com/ZalakRajvanshi/gitlane), so the optional 6 PM daily digest and browser dashboard share the same streak, sprints, and goals as the editor.
+Click it, choose **Commit now**, and Gitbuddy will:
+
+1. Stage your changes
+2. **Scan every staged file** for API keys, tokens, passwords, and private keys
+3. Auto-unstage and gitignore anything that should never be committed — `.env`, `credentials.json`, `id_rsa`
+4. Offer to **auto-fix** any secrets found inside your files
+5. Write a Conventional Commits message
+6. Commit, and push
+
+Steps 1–5 need **no account, no key, and no internet.**
+
+---
+
+## About the commit message
+
+Gitbuddy writes the message three ways, and picks the best one available — you never configure this and you're never asked for anything.
+
+| If you have… | You get | Setup |
+|---|---|---|
+| **GitHub Copilot** (the free tier counts) | An AI-written message | none |
+| **Nothing** | A message built from your staged files | none |
+
+The built-in generator reads which files were added, modified and deleted, and where they live:
+
+```
+feat(auth): add login.ts and reset.ts
+fix(api): update client.ts
+test: add test_auth.py, update test_api.py
+refactor(legacy): remove old.ts and dead.ts
+build: update 2 files
+```
+
+And if you type a one-line description, that becomes the message:
+
+> *"add password reset flow"* → `feat(auth): add password reset flow`
+
+If Copilot is rate-limited or you're offline, it quietly falls back to the built-in generator. You always get a message.
+
+---
+
+## What it detects
+
+API keys, secret keys, passwords, access tokens, and provider-specific formats — OpenAI (`sk-…`), Groq (`gsk_…`), GitHub (`ghp_…`), and Google (`AIza…`).
+
+Files that should never be committed at all are unstaged and gitignored on sight: `.env`, `.env.local`, `.env.production`, `credentials.json`, `secrets.json`, `serviceAccountKey.json`, `private_key.pem`, `id_rsa`.
+
+Placeholder values like `your_key_here` and `xxx` are ignored, so it won't nag about your example files.
 
 ---
 
 ## Commands
 
-All available from the command palette (`Ctrl+Shift+P`) or by clicking the status-bar item:
-
-- **Gitlane: Commit Now** — full ship flow
-- **Gitlane: Ask a Question** — answers in a markdown buffer
-- **Gitlane: Open Dashboard** — opens the browser dashboard (needs the Python server)
-- **Gitlane: Show Menu** — quick-pick of the above
-
----
-
-## Status bar
-
-| State | Meaning |
+| Command | What it does |
 |---|---|
-| `⚙ Gitlane: set up` | First-run — click to pick your project folder |
-| `🔥 5 ✓` | 5-day streak, working copy clean |
-| `🔥 5 · 3 to commit` (yellow) | 3 uncommitted changes — click to commit |
-| `⚡ ✓` | Up and running, no streak yet |
+| **Commit Now** | The full flow: stage → scan → fix → message → commit → push |
+| **Generate AI Commit Message** | Fills the Source Control box only. Also the ✨ button, and `Ctrl+Alt+M` |
+| **Show Menu** | Everything above, from the status bar |
+| **Ask a Question About My Work** | "What did I build this week?" — needs Copilot |
+| **Sign in to GitHub** | Optional. Lets Gitbuddy create repos for you |
 
 ---
 
-## Keywords
+## Pushing to GitHub
 
-AI commit message generator, AI commits, Conventional Commits, smart commit, git AI, git assistant, secret scanner, secret detection, credential leak prevention, gitleaks alternative, detect secrets, .env helper, dotenv, one-click commit, GitHub Copilot alternative, Groq, Llama, productivity, streak tracker.
+If your repo already has a remote, Gitbuddy just pushes.
+
+If it doesn't, Gitbuddy can create the repo for you. That's the one place it asks for anything, and it uses **VS Code's own GitHub sign-in** — the same one GitLens uses. One "Allow" click, no personal access token to generate, and you can revoke it any time from the Accounts menu. If you're already signed into VS Code with GitHub, it's zero clicks.
+
+It also catches a subtle one: if your remote URL is still a template like `https://github.com/YOUR_USERNAME/repo.git`, pushes fail silently and most people never work out why. Gitbuddy spots it and offers to fix it.
 
 ---
 
-## License
+## Settings
 
-MIT. Free to use, modify, and ship.
+Everything is optional.
 
-Author: **Zalak Rajvanshi** — [github.com/ZalakRajvanshi](https://github.com/ZalakRajvanshi)
+| Setting | Default | What it's for |
+|---|---|---|
+| `gitbuddy.githubUsername` | *(from your sign-in)* | Override the detected account |
+| `gitbuddy.model` | *(recommended default)* | Only used with the optional Groq fallback |
+| `gitbuddy.projectRoot` | *(empty)* | Link the companion Python CLI, below |
+| `gitbuddy.dashboardUrl` | `http://localhost:7123` | Where that project's dashboard runs |
+
+---
+
+## Requirements
+
+- **Git**, installed and on your PATH. Gitbuddy tells you if it isn't.
+- VS Code 1.90 or newer.
+
+That's it.
+
+---
+
+## Privacy
+
+The secret scanner runs entirely on your machine — it's pattern matching, with no network calls of any kind. Your secrets are never transmitted anywhere, including to us.
+
+When a commit message is generated by Copilot, your staged **filenames and a diff summary** are sent to that model, exactly as they would be by any other AI commit extension. The built-in generator sends nothing at all.
+
+---
+
+## Optional: the companion CLI
+
+Gitbuddy started life alongside a small Python project — a terminal UI, a daily digest, and a browser dashboard sharing one streak database. You don't need it, and the extension never mentions it unless you go looking.
+
+If you use it, point `gitbuddy.projectRoot` at it and the editor and CLI will share one database. Otherwise Gitbuddy keeps its own, and you'll never know the difference.
+
+Source: [github.com/ZalakRajvanshi/Gitlane](https://github.com/ZalakRajvanshi/Gitlane)
+
+---
+
+MIT licensed.

@@ -1,12 +1,16 @@
 import * as vscode from "vscode";
 import { StatusBar } from "./statusBar";
 import { runCommitFlow } from "./commitFlow";
-import { ensureProjectRoot, readEnv, loadSettingsJson, dbPath } from "./env";
-import { GitlaneDb } from "./db";
-import { answerQuestion, modelFromSettings } from "./groq";
+import { dbPath, linkedProjectRoot, pickProjectRoot } from "./env";
+import { GitbuddyDb } from "./db";
+import { answerQuestion, canAnswerQuestions, resolveProvider } from "./ai";
 import { fetchAllRecent } from "./github";
 import { setContext } from "./state";
 import { generateCommitMessageCommand } from "./scmCommand";
+import {
+  clearCredentials, getGithubSession, getGithubToken,
+  getGithubUsername, promptForGroqKey,
+} from "./credentials";
 
 let statusBar: StatusBar | undefined;
 
@@ -22,16 +26,20 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("gitlane.commitNow",             runCommitFlow),
-    vscode.commands.registerCommand("gitlane.generateCommitMessage", generateCommitMessageCommand),
-    vscode.commands.registerCommand("gitlane.ask",                   askQuestion),
-    vscode.commands.registerCommand("gitlane.openDashboard",         openDashboard),
-    vscode.commands.registerCommand("gitlane.showMenu",              showMenu),
+    vscode.commands.registerCommand("gitbuddy.commitNow",             runCommitFlow),
+    vscode.commands.registerCommand("gitbuddy.generateCommitMessage", generateCommitMessageCommand),
+    vscode.commands.registerCommand("gitbuddy.ask",                   askQuestion),
+    vscode.commands.registerCommand("gitbuddy.openDashboard",         openDashboard),
+    vscode.commands.registerCommand("gitbuddy.showMenu",              showMenu),
+    vscode.commands.registerCommand("gitbuddy.setApiKey",             setApiKey),
+    vscode.commands.registerCommand("gitbuddy.signInGithub",          signInGithub),
+    vscode.commands.registerCommand("gitbuddy.linkPythonProject",     linkPythonProject),
+    vscode.commands.registerCommand("gitbuddy.signOut",               signOut),
   );
 
-  // Off the activation hot path: project-root prompt (first run only) + initial refresh.
-  statusBar.attach().catch(err => console.error("[gitlane] status bar attach failed:", err));
-  void ensureProjectRoot();
+  // Off the activation hot path. Nothing here prompts — the first prompt the
+  // user sees is the API-key box, and only once they ask for a commit message.
+  statusBar.attach().catch(err => console.error("[gitbuddy] status bar attach failed:", err));
 }
 
 export function deactivate(): void {
@@ -39,71 +47,110 @@ export function deactivate(): void {
 }
 
 function openDashboard(): void {
-  const url = vscode.workspace.getConfiguration("gitlane").get<string>("dashboardUrl", "http://localhost:7123");
+  const url = vscode.workspace.getConfiguration("gitbuddy").get<string>("dashboardUrl", "http://localhost:7123");
   vscode.env.openExternal(vscode.Uri.parse(url));
 }
 
-async function askQuestion(): Promise<void> {
-  const root = await ensureProjectRoot();
+async function setApiKey(): Promise<void> {
+  const key = await promptForGroqKey();
+  if (key) vscode.window.showInformationMessage("Groq API key saved to your OS keychain.");
+}
+
+async function signInGithub(): Promise<void> {
+  const session = await getGithubSession(true);
+  if (session) {
+    vscode.window.showInformationMessage(`Signed in to GitHub as @${session.account.label}.`);
+  }
+}
+
+async function signOut(): Promise<void> {
+  const yes = await vscode.window.showWarningMessage(
+    "Remove the stored Groq API key from this machine's keychain? " +
+    "Your GitHub sign-in is managed by VS Code — remove it from the Accounts menu instead.",
+    { modal: true }, "Remove",
+  );
+  if (yes !== "Remove") return;
+  await clearCredentials();
+  vscode.window.showInformationMessage("Stored Groq key removed.");
+}
+
+async function linkPythonProject(): Promise<void> {
+  const root = await pickProjectRoot();
   if (!root) return;
+  vscode.window.showInformationMessage(`Linked to ${root} — the CLI and the editor now share one streak database.`);
+  await statusBar?.refresh();
+}
 
-  const env = readEnv(root);
-  if (!env.GROQ_API_KEY) {
-    vscode.window.showErrorMessage("GROQ_API_KEY missing from the project's .env file.");
+async function askQuestion(): Promise<void> {
+  const ai = await resolveProvider(true);
+  if (!canAnswerQuestions(ai)) {
+    vscode.window.showInformationMessage(
+      "Answering questions needs a language model. Commit messages don't — those work either way. " +
+      "Sign in to GitHub Copilot (it has a free tier) and this unlocks.",
+    );
     return;
   }
 
-  const settings = loadSettingsJson(root);
-  const username = (settings.github_username as string) || "";
+  // Reading your commits needs to know whose they are — the sign-in gives us
+  // both the name and the token, so this is one dialog, not two questions.
+  const username = await getGithubUsername(true);
   if (!username) {
-    vscode.window.showErrorMessage("github_username missing from settings.json in the project folder.");
+    vscode.window.showErrorMessage("Sign in to GitHub so Gitbuddy knows whose commits to read.");
     return;
   }
 
-  const question = await vscode.window.showInputBox({ prompt: "Ask Gitlane anything about your work" });
+  const question = await vscode.window.showInputBox({ prompt: "Ask Gitbuddy anything about your work" });
   if (!question) return;
 
   await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: "Gitlane", cancellable: false },
+    { location: vscode.ProgressLocation.Notification, title: "Gitbuddy", cancellable: false },
     async progress => {
       progress.report({ message: "Fetching commits + thinking…" });
       try {
-        const commits = await fetchAllRecent(env.GITHUB_TOKEN, username, 7);
-        const db = new GitlaneDb(dbPath(root));
+        const commits = await fetchAllRecent(await getGithubToken(false), username, 7);
+        const db = new GitbuddyDb(dbPath());
         const memory = await db.getMemory();
-        const answer = await answerQuestion(
-          { apiKey: env.GROQ_API_KEY!, model: modelFromSettings(root) },
-          username,
-          memory,
-          question,
-          commits,
-        );
+        const answer = await answerQuestion(ai, username, memory, question, commits);
         const doc = await vscode.workspace.openTextDocument({
           content: `Q: ${question}\n\n${answer}`, language: "markdown",
         });
         await vscode.window.showTextDocument(doc, { preview: true });
       } catch (e: any) {
-        vscode.window.showErrorMessage(`Gitlane: ${e.message || e}`);
+        vscode.window.showErrorMessage(`Gitbuddy: ${e.message || e}`);
       }
     },
   );
 }
 
 async function showMenu(): Promise<void> {
+  const linked  = linkedProjectRoot();
+  const session = await getGithubSession(false);
+
   const items: vscode.QuickPickItem[] = [
-    { label: "$(git-commit) Commit now",  description: "Stage, scan secrets, generate message, push" },
-    { label: "$(question) Ask Gitlane",   description: "What did I work on this week?" },
-    { label: "$(browser) Open dashboard", description: "Browser dashboard (requires Python server running)" },
-    { label: "$(gear) Pick project folder", description: "Change the Gitlane project location" },
+    { label: "$(git-commit) Commit now",    description: "Stage, scan for secrets, write the message, push" },
+    { label: "$(sparkle) Generate message", description: "Fill the Source Control box only" },
+    { label: "$(question) Ask Gitbuddy",    description: "What did I work on this week?" },
+    {
+      label: "$(github) GitHub sign-in",
+      description: session ? `Signed in as @${session.account.label}` : "Optional — lets Gitbuddy create repos for you",
+    },
+    {
+      label: "$(link) Link Python project",
+      description: linked ? `Linked: ${linked}` : "Optional — share the streak database with the CLI",
+    },
   ];
-  const pick = await vscode.window.showQuickPick(items, { placeHolder: "Gitlane" });
-  if (!pick) return;
-  if (pick.label.includes("Commit now"))            return runCommitFlow();
-  if (pick.label.includes("Ask Gitlane"))           return askQuestion();
-  if (pick.label.includes("Open dashboard"))        return openDashboard();
-  if (pick.label.includes("Pick project folder")) {
-    await vscode.workspace.getConfiguration().update("gitlane.projectRoot", "", vscode.ConfigurationTarget.Global);
-    await ensureProjectRoot();
-    await statusBar?.refresh();
+  // A dead button for anyone not running the Python server, so only offer it
+  // when a project is actually linked.
+  if (linked) {
+    items.push({ label: "$(browser) Open dashboard", description: "Needs the Python server running" });
   }
+
+  const pick = await vscode.window.showQuickPick(items, { placeHolder: "Gitbuddy" });
+  if (!pick) return;
+  if (pick.label.includes("Commit now"))          return runCommitFlow();
+  if (pick.label.includes("Generate message"))    return generateCommitMessageCommand();
+  if (pick.label.includes("Ask Gitbuddy"))        return askQuestion();
+  if (pick.label.includes("GitHub sign-in"))      return signInGithub();
+  if (pick.label.includes("Link Python project")) return linkPythonProject();
+  if (pick.label.includes("Open dashboard"))      return openDashboard();
 }

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { GitlaneDb } from "./db";
-import { dbPath, getProjectRoot } from "./env";
+import { GitbuddyDb } from "./db";
+import { dbPath } from "./env";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -28,7 +28,7 @@ export class StatusBar {
 
   constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    this.item.command = "gitlane.showMenu";
+    this.item.command = "gitbuddy.showMenu";
     this.item.show();
     this.render();
   }
@@ -42,10 +42,8 @@ export class StatusBar {
 
   /** Watches data/gitmind.db for changes (Python CLI / 6 PM tick writes) so the streak updates instantly. */
   private watchDb(): void {
-    const root = getProjectRoot();
-    if (!root) return;
-    const file = dbPath(root);
-    if (!fs.existsSync(file)) return;
+    const file = dbPath();
+    if (!file || !fs.existsSync(file)) return;
     try {
       this.dbWatcher = fs.watch(file, { persistent: false }, () => {
         this.refresh().catch(() => {});
@@ -74,14 +72,14 @@ export class StatusBar {
   }
 
   async refresh(): Promise<void> {
-    const root = getProjectRoot();
-    if (!root || !fs.existsSync(dbPath(root))) {
+    const file = dbPath();
+    if (!file) {
       this.dbReady = false;
       this.render();
       return;
     }
     try {
-      const db = new GitlaneDb(dbPath(root));
+      const db = new GitbuddyDb(file);
       const stats = await db.getStats();
       this.streak = stats.streak;
       this.dbReady = true;
@@ -123,8 +121,8 @@ export class StatusBar {
 
   private render(): void {
     if (!this.dbReady) {
-      this.item.text = "$(gear) Gitlane: set up";
-      this.item.tooltip = "Click to pick the Gitlane project folder";
+      this.item.text = "$(gear) Gitbuddy";
+      this.item.tooltip = "Click for the Gitbuddy menu";
       this.item.backgroundColor = undefined;
       return;
     }
@@ -135,7 +133,7 @@ export class StatusBar {
 
     const streakLine = this.streak > 0
       ? `🔥 ${this.streak} day streak`
-      : "Working with Gitlane";
+      : "Working with Gitbuddy";
 
     if (dirty > 0 && name) {
       this.item.text = `≫ ${name} · ${dirty} change${dirty === 1 ? "" : "s"}`;
@@ -162,14 +160,14 @@ export class StatusBar {
       this.item.text = `≫ ${ws.name} · git not initialized`;
       this.item.tooltip =
         `${ws.name} isn't a git repository yet.\n\n` +
-        `Click → "Commit now" — Gitlane will offer to initialize it for you.`;
+        `Click → "Commit now" — Gitbuddy will offer to initialize it for you.`;
       this.item.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
       return;
     }
 
     this.item.text = this.streak > 0
       ? `≫ ${this.streak} day streak`
-      : "≫ Gitlane ready";
+      : "≫ Gitbuddy ready";
     this.item.tooltip = "No folder open in VS Code\n\nClick for menu";
     this.item.backgroundColor = undefined;
   }
