@@ -13,7 +13,7 @@ load_dotenv(BASE_DIR / ".env", override=True)
 
 DEFAULTS = {
     "github_username": "",
-    "groq_model": "llama3-70b-8192",
+    "groq_model": "openai/gpt-oss-120b",
     "timezone": "Asia/Kolkata",
     "notify_on_boot": True,
     "web_port": 7123,

@@ -1,6 +1,6 @@
 {
   "github_username": "your_github_username",
-  "groq_model": "llama-3.3-70b-versatile",
+  "groq_model": "openai/gpt-oss-120b",
   "timezone": "Asia/Kolkata",
   "notify_on_boot": true,
   "web_port": 7123,

@@ -1,4 +1,5 @@
 """All AI/LLM calls — Groq with persistent memory context."""
+import re
 from groq import Groq
 from agent.config import groq_key, load
 from agent import database as db
@@ -6,24 +7,61 @@ from agent import database as db
 def _client():
     return Groq(api_key=groq_key())
 
+DEFAULT_MODEL = "openai/gpt-oss-120b"
+
+def _model() -> str:
+    """Groq retired the whole Llama line; upgrade stale settings.json values."""
+    configured = load().get("groq_model", "")
+    if not configured or configured.lower().startswith("llama"):
+        return DEFAULT_MODEL
+    return configured
+
+def _reasoning_effort(model: str) -> str | None:
+    """Every model Groq still serves reasons first, and those tokens come out
+    of the same budget as the answer — leave it unchecked and `content` comes
+    back empty. Each family names the knob differently."""
+    if model.startswith("openai/gpt-oss"):
+        return "low"
+    if model.startswith("qwen/"):
+        return "none"
+    return None
+
 def _chat(system: str, user: str, max_tokens: int = 1024) -> str:
-    cfg = load()
-    model = cfg.get("groq_model", "llama3-70b-8192")
+    model = _model()
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user",   "content": user},
+    ]
+    # The visible answer needs headroom on top of the thinking.
+    budget = max(max_tokens + 512, 1024)
+    kwargs = dict(
+        model=model,
+        messages=messages,
+        max_completion_tokens=budget,
+        temperature=0.7,
+    )
+    effort = _reasoning_effort(model)
+    if effort:
+        kwargs["reasoning_effort"] = effort
     try:
         key = groq_key()  # call outside inner try so errors surface clearly
         client = Groq(api_key=key)
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user",   "content": user},
-            ],
-            max_tokens=max_tokens,
-            temperature=0.7,
-        )
-        return resp.choices[0].message.content.strip()
+        try:
+            resp = client.chat.completions.create(**kwargs)
+        except Exception:
+            # A model we mis-classified rejects the knob by name — retry plain.
+            if not effort:
+                raise
+            kwargs.pop("reasoning_effort")
+            resp = client.chat.completions.create(**kwargs)
+        text = (resp.choices[0].message.content or "").strip()
+        return _strip_thinking(text)
     except Exception as e:
         return f"⚠️  AI error: {e}"
+
+def _strip_thinking(text: str) -> str:
+    """Some models narrate inside <think> tags instead of a separate field."""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.S | re.I).replace("<think>", "").replace("</think>", "").strip()
 
 def _memory_context() -> str:
     mem = db.get_all_memory()
