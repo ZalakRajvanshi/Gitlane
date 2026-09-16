@@ -53,7 +53,9 @@ export async function unstagedFiles(repoPath: string): Promise<string[]> {
 }
 
 export async function stagedFiles(repoPath: string): Promise<string[]> {
-  const r = await run("git", ["diff", "--staged", "--name-only"], repoPath);
+  // quotePath=false: by default git octal-escapes and quotes non-ASCII paths,
+  // which then match no file on disk — the scanner would silently skip them.
+  const r = await run("git", ["-c", "core.quotePath=false", "diff", "--staged", "--name-only"], repoPath);
   return r.stdout.split("\n").filter(Boolean);
 }
 
@@ -78,10 +80,13 @@ export interface StagedEntry {
  * feature, changing them reads as a fix, and removing them doesn't.
  */
 export async function stagedNameStatus(repoPath: string): Promise<StagedEntry[]> {
-  const r = await run("git", ["diff", "--staged", "--name-status"], repoPath);
+  const r = await run("git", ["-c", "core.quotePath=false", "diff", "--staged", "--name-status"], repoPath);
+  // Fields are tab-separated. Splitting on any whitespace broke paths with
+  // spaces ("Projects - Shortcut.lnk" came back as "Shortcut.lnk"). For
+  // renames the last field is the new path.
   return r.stdout.split("\n").filter(Boolean).map(line => {
-    const [status, ...rest] = line.split(/\s+/);
-    return { status: status.charAt(0), file: rest[rest.length - 1] ?? "" };
+    const [status, ...paths] = line.split("\t");
+    return { status: status.charAt(0), file: paths[paths.length - 1] ?? "" };
   }).filter(e => e.file);
 }
 

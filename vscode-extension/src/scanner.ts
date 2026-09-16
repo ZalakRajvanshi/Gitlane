@@ -34,11 +34,41 @@ export interface Finding {
   fullMatch: string;
 }
 
+/** Anything bigger is a bundle, a dataset or a lockfile — not hand-written secrets. */
+const MAX_SCAN_BYTES = 2 * 1024 * 1024;
+
+/**
+ * The contents of a staged path, or undefined if it isn't something we can
+ * meaningfully scan as text.
+ *
+ * "Staged path" is not the same as "file". A nested git repository or a
+ * submodule is staged as a gitlink and shows up in `git diff --staged` as a
+ * plain name, but on disk it's a directory — reading it threw EISDIR and took
+ * down the whole commit flow. Binaries (a Windows .lnk, a compiled asset with
+ * an unlisted extension) and files locked or deleted since staging are the
+ * same class of problem. None of them should stop a commit.
+ */
+function readScannableText(filepath: string): string | undefined {
+  try {
+    const stat = fs.statSync(filepath);
+    if (!stat.isFile() || stat.size > MAX_SCAN_BYTES) return undefined;
+
+    const buf = fs.readFileSync(filepath);
+    // Git's own binary heuristic: a NUL byte in the first 8 KB.
+    if (buf.subarray(0, 8000).includes(0)) return undefined;
+    return buf.toString("utf8");
+  } catch {
+    return undefined;
+  }
+}
+
 export function scanFile(filepath: string): Finding[] {
   if (SKIP_EXTENSIONS.has(path.extname(filepath).toLowerCase())) return [];
-  if (!fs.existsSync(filepath)) return [];
 
-  const lines = fs.readFileSync(filepath, "utf8").split(/\r?\n/);
+  const text = readScannableText(filepath);
+  if (text === undefined) return [];
+
+  const lines = text.split(/\r?\n/);
   const findings: Finding[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
