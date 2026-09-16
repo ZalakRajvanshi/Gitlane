@@ -57,11 +57,10 @@ export async function pickProjectRoot(): Promise<string | undefined> {
 }
 
 export interface EnvVars {
-  GROQ_API_KEY?: string;
   GITHUB_TOKEN?: string;
 }
 
-/** Legacy path: read keys out of the linked project's .env. See credentials.ts. */
+/** Legacy path: a GitHub token already in the linked project's .env. See credentials.ts. */
 export function readEnv(projectRoot: string): EnvVars {
   const envPath = path.join(projectRoot, ".env");
   if (!fs.existsSync(envPath)) return {};
@@ -76,7 +75,6 @@ export function readEnv(projectRoot: string): EnvVars {
     if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
       val = val.slice(1, -1);
     }
-    if (key === "GROQ_API_KEY") out.GROQ_API_KEY = val;
     if (key === "GITHUB_TOKEN") out.GITHUB_TOKEN = val;
   }
   return out;

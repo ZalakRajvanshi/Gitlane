@@ -53,7 +53,7 @@ Steps 1–5 need **no account, no key, and no internet.**
 
 ## About the commit message
 
-Gitbuddy writes the message three ways, and picks the best one available — you never configure this and you're never asked for anything.
+Gitbuddy detects what's available and picks automatically — you never configure this and you're never asked for anything.
 
 | If you have… | You get | Setup |
 |---|---|---|
@@ -93,7 +93,7 @@ Placeholder values like `your_key_here` and `xxx` are ignored, so it won't nag a
 | Command | What it does |
 |---|---|
 | **Commit Now** | The full flow: stage → scan → fix → message → commit → push |
-| **Generate AI Commit Message** | Fills the Source Control box only. Also the ✨ button, and `Ctrl+Alt+M` |
+| **Generate Commit Message** | Fills the Source Control box only. Also the ✨ button, and `Ctrl+Alt+M` |
 | **Show Menu** | Everything above, from the status bar |
 | **Ask a Question About My Work** | "What did I build this week?" — needs Copilot |
 | **Sign in to GitHub** | Optional. Lets Gitbuddy create repos for you |
@@ -117,7 +117,6 @@ Everything is optional.
 | Setting | Default | What it's for |
 |---|---|---|
 | `gitbuddy.githubUsername` | *(from your sign-in)* | Override the detected account |
-| `gitbuddy.model` | *(recommended default)* | Only used with the optional Groq fallback |
 | `gitbuddy.projectRoot` | *(empty)* | Link the companion Python CLI, below |
 | `gitbuddy.dashboardUrl` | `http://localhost:7123` | Where that project's dashboard runs |
 

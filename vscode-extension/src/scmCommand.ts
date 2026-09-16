@@ -15,7 +15,7 @@ type GitAPI = {
 /**
  * The sparkle button in VS Code's Source Control panel — and Ctrl+Alt+M.
  *
- * Reads staged (or unstaged) files, asks Groq for a Conventional Commits
+ * Reads staged (or unstaged) files, writes a Conventional Commits
  * message, and drops the result into the SCM input box. The user then hits
  * VS Code's own commit button to ship it. No prompts, no modals.
  *
@@ -26,7 +26,7 @@ type GitAPI = {
 export async function generateCommitMessageCommand(arg?: vscode.SourceControl): Promise<void> {
   if (!(await requireGit())) return;
 
-  // Always resolves — Copilot, an opt-in Groq key, or the offline generator.
+  // Always resolves — Copilot if it's there, otherwise the offline generator.
   const ai = await resolveProvider(true);
 
   const repo = await pickRepo(arg);

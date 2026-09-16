@@ -1,7 +1,7 @@
 {
   "name": "gitbuddy",
-  "displayName": "Gitbuddy \u2014 Secret Guard & AI Commits",
-  "description": "Scans every file you stage for leaked API keys, passwords and tokens \u2014 then moves them to .env, rewrites your source and gitignores them for you. Plus AI commit messages via GitHub Copilot (or a free Groq key) and one-click push. The scanner needs no account, no key and no internet.",
+  "displayName": "Gitbuddy — Secret Guard & AI Commits",
+  "description": "Scans every file you stage for leaked API keys, passwords and tokens — then moves them to .env, rewrites your source and gitignores them for you. Writes your commit message automatically, and pushes in one click. No account, no API key, no setup.",
   "version": "0.7.0",
   "publisher": "zalakrajvanshi",
   "license": "MIT",
@@ -42,7 +42,6 @@
     "conventional commits",
     "one click commit",
     "copilot alternative",
-    "groq",
     "github",
     "git"
   ],
@@ -54,11 +53,11 @@
     "commands": [
       {
         "command": "gitbuddy.commitNow",
-        "title": "Gitbuddy: Commit Now (AI message + secret scan + push)"
+        "title": "Gitbuddy: Commit Now (secret scan + message + push)"
       },
       {
         "command": "gitbuddy.generateCommitMessage",
-        "title": "Gitbuddy: Generate AI Commit Message",
+        "title": "Gitbuddy: Generate Commit Message",
         "icon": "$(sparkle)"
       },
       {
@@ -74,20 +73,12 @@
         "title": "Gitbuddy: Show Menu"
       },
       {
-        "command": "gitbuddy.setApiKey",
-        "title": "Gitbuddy: Set Groq API Key (optional fallback)"
-      },
-      {
         "command": "gitbuddy.signInGithub",
         "title": "Gitbuddy: Sign in to GitHub"
       },
       {
         "command": "gitbuddy.linkPythonProject",
         "title": "Gitbuddy: Link Python Project (optional)"
-      },
-      {
-        "command": "gitbuddy.signOut",
-        "title": "Gitbuddy: Remove Stored Groq Key"
       }
     ],
     "menus": {
@@ -109,11 +100,6 @@
     "configuration": {
       "title": "Gitbuddy",
       "properties": {
-        "gitbuddy.model": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Groq model, used only when GitHub Copilot isn't available. Leave empty for the recommended default (`openai/gpt-oss-120b`). See [Groq's model list](https://console.groq.com/docs/models)."
-        },
         "gitbuddy.githubUsername": {
           "type": "string",
           "default": "",
